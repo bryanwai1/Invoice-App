@@ -76,7 +76,13 @@ async function sendInvoicePDF(phone, invoiceNumber, pdfPath, clientName) {
 // ── Main webhook handler
 async function handleWebhook(body) {
   try {
-    if (body.typeWebhook !== 'incomingMessageReceived') return;
+    const { typeWebhook } = body;
+
+    // Process incoming messages AND manually-sent outgoing messages
+    // Ignore API-sent messages (bot's own replies) to avoid loops
+    const allowed = ['incomingMessageReceived', 'outgoingMessageReceived'];
+    if (!allowed.includes(typeWebhook)) return;
+    if (typeWebhook === 'outgoingAPIMessageReceived') return;
 
     const msgType = body.messageData?.typeMessage;
     const chatId = body.senderData?.chatId;   // group: @g.us | direct: @c.us
