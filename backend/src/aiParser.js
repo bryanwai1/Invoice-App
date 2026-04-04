@@ -1,7 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 const { format, addDays } = require('date-fns');
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 async function extractInvoiceFromText(text, senderPhone) {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -40,19 +39,36 @@ Rules:
 - Return ONLY the JSON, no explanation`;
 
   try {
-    const res = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }]
-    });
+    let raw;
 
-    const raw = res.content[0].text.trim().replace(/```json|```/g, '');
+    if (process.env.OPENAI_API_KEY) {
+      // Use OpenAI
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const res = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1024,
+        response_format: { type: 'json_object' }
+      });
+      raw = res.choices[0].message.content;
+    } else if (process.env.ANTHROPIC_API_KEY) {
+      // Use Claude
+      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const res = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }]
+      });
+      raw = res.content[0].text.trim().replace(/```json|```/g, '');
+    } else {
+      return null;
+    }
+
     const data = JSON.parse(raw);
-
     if (!data.is_invoice_request || !data.client_name || !data.items?.length) return null;
     if (senderPhone && !data.client_phone) data.client_phone = senderPhone;
-
     return data;
+
   } catch (err) {
     console.error('[AI Parser] Error:', err.message);
     return null;
