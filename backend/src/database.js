@@ -66,6 +66,7 @@ db.exec(`
     invoice_prefix TEXT DEFAULT 'INV',
     next_invoice_number INTEGER DEFAULT 1000,
     bank_details TEXT,
+    group_chat_id TEXT,
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
