@@ -1,0 +1,37 @@
+services:
+  backend:
+    build: ./backend
+    container_name: invoice-backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      - NODE_ENV=production
+      - FRONTEND_URL=http://localhost  # Change to your domain
+    volumes:
+      - invoice_data:/app/data        # SQLite DB + WhatsApp session
+      - invoice_pdfs:/app/pdfs        # Generated PDFs
+    expose:
+      - "3001"
+    # Needed by Chromium inside Docker
+    security_opt:
+      - seccomp:unconfined
+    shm_size: "256mb"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=  # Leave empty to use relative paths via nginx proxy
+    container_name: invoice-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"     # Used if you add SSL via Certbot
+    depends_on:
+      - backend
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro  # Mount SSL certs if using HTTPS
+
+volumes:
+  invoice_data:
+  invoice_pdfs:

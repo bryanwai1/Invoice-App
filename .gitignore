@@ -3,5 +3,7 @@ backend/data/
 backend/pdfs/
 backend/.env
 frontend/dist/
+ssl/
 .DS_Store
 *.log
+frontend/nginx-ssl.conf
