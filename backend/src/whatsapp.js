@@ -187,23 +187,32 @@ async function handleWebhook(body) {
 
     await sendMessage(chatId, `⏳ Creating invoice for *${parsed.client_name}*...`);
 
-    const { createInvoice } = require('./routes/invoices');
-    const invoice = await createInvoice({ ...parsed, source: 'whatsapp', whatsapp_phone: senderPhone });
+    try {
+      const { createInvoice } = require('./routes/invoices');
+      const invoice = await createInvoice({ ...parsed, source: 'whatsapp', whatsapp_phone: senderPhone });
 
-    const company = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
-    const sym = company?.currency_symbol || '$';
+      const company = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
+      const sym = company?.currency_symbol || '$';
 
-    await sendMessage(chatId,
-      `✅ *Invoice Created!*\n\n` +
-      `📄 #${invoice.invoice_number}\n` +
-      `👤 ${invoice.client_name}\n` +
-      `💰 Total: ${sym}${Number(invoice.total).toFixed(2)}\n` +
-      `📅 Due: ${invoice.due_date || 'N/A'}\n\n` +
-      `Sending PDF...`
-    );
+      await sendMessage(chatId,
+        `✅ *Invoice Created!*\n\n` +
+        `📄 #${invoice.invoice_number}\n` +
+        `👤 ${invoice.client_name}\n` +
+        `💰 Total: ${sym}${Number(invoice.total).toFixed(2)}\n` +
+        `📅 Due: ${invoice.due_date || 'N/A'}\n\n` +
+        `Sending PDF...`
+      );
 
-    if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) {
-      await sendInvoicePDF(chatId, invoice.invoice_number, invoice.pdf_path, invoice.client_name);
+      if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) {
+        await sendInvoicePDF(chatId, invoice.invoice_number, invoice.pdf_path, invoice.client_name);
+      } else {
+        console.error('[WhatsApp] PDF not found at:', invoice.pdf_path);
+        await sendMessage(chatId, '⚠️ Invoice created but PDF generation failed. Check the web app.');
+      }
+    } catch (invoiceErr) {
+      console.error('[WhatsApp] Invoice creation failed:', invoiceErr.message);
+      console.error(invoiceErr.stack);
+      await sendMessage(chatId, `❌ Invoice creation failed: ${invoiceErr.message}`);
     }
 
   } catch (err) {
