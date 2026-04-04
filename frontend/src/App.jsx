@@ -14,7 +14,7 @@ import InvoiceDetail from './pages/InvoiceDetail';
 import SettingsPage from './pages/SettingsPage';
 import WhatsAppPage from './pages/WhatsAppPage';
 
-const socket = io({ path: '/socket.io' });
+const socket = io(import.meta.env.VITE_API_URL || '', { path: '/socket.io' });
 
 export default function App() {
   const [waStatus, setWaStatus] = useState({ status: 'disconnected' });

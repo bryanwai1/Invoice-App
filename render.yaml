@@ -1,0 +1,46 @@
+services:
+  # ── Backend API
+  - type: web
+    name: invoice-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: FRONTEND_URL
+        fromService:
+          name: invoice-frontend
+          type: web
+          property: host
+      - key: COMPANY_NAME
+        value: My Company
+      - key: CURRENCY_SYMBOL
+        value: $
+      - key: TAX_RATE
+        value: 0
+    disk:
+      name: invoice-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1   # Free: 1GB persistent disk (keeps SQLite + PDFs)
+
+  # ── Frontend Static Site
+  - type: web
+    name: invoice-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: invoice-backend
+          type: web
+          property: host
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
