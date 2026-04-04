@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { format, addDays } = require('date-fns');
 
 async function extractInvoiceFromText(text, senderPhone) {
@@ -41,7 +42,13 @@ Rules:
   try {
     let raw;
 
-    if (process.env.OPENAI_API_KEY) {
+    if (process.env.GEMINI_API_KEY) {
+      // Use Gemini (free tier: 1500 req/day)
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const res = await model.generateContent(prompt);
+      raw = res.response.text().trim().replace(/```json|```/g, '');
+    } else if (process.env.OPENAI_API_KEY) {
       // Use OpenAI
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const res = await client.chat.completions.create({
