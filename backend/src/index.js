@@ -35,10 +35,11 @@ app.use('/api/whatsapp', require('./routes/whatsapp'));
 app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // Socket.IO
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   console.log('[Socket] Client connected:', socket.id);
   // Send current WhatsApp status on connect
-  socket.emit('wa:status', wa.getStatus());
+  const status = await wa.getStatus();
+  socket.emit('wa:status', status);
   socket.on('disconnect', () => console.log('[Socket] Client disconnected:', socket.id));
 });
 

@@ -1,216 +1,163 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
-const QRCode = require('qrcode');
+const axios = require('axios');
+const fs = require('fs');
+const FormData = require('form-data');
 const db = require('./database');
 const { parseInvoiceMessage } = require('./messageParser');
-const path = require('path');
-const fs = require('fs');
 
-let client = null;
-let currentQR = null;
-let status = 'disconnected';
-let io = null; // Socket.IO instance (injected)
+let io = null;
 
-function setIO(socketIO) {
-  io = socketIO;
+function setIO(socketIO) { io = socketIO; }
+function emit(event, data) { if (io) io.emit(event, data); }
+
+function getConfig() {
+  const instanceId = process.env.GREEN_API_INSTANCE_ID;
+  const token = process.env.GREEN_API_TOKEN;
+  return { instanceId, token, configured: !!(instanceId && token) };
 }
 
-function emit(event, data) {
-  if (io) io.emit(event, data);
+function baseUrl() {
+  const { instanceId } = getConfig();
+  return `https://api.green-api.com/waInstance${instanceId}`;
 }
 
-function getStatus() {
-  return { status, qr: currentQR };
-}
-
-async function initialize() {
-  if (client) {
-    try { await client.destroy(); } catch (_) {}
-    client = null;
-  }
-
-  status = 'initializing';
-  emit('wa:status', { status });
-
-  client = new Client({
-    authStrategy: new LocalAuth({
-      dataPath: path.join(__dirname, '..', 'data', '.wwebjs_auth')
-    }),
-    puppeteer: {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ]
-    }
-  });
-
-  client.on('qr', async (qr) => {
-    status = 'qr_pending';
-    qrcode.generate(qr, { small: true });
-    try {
-      currentQR = await QRCode.toDataURL(qr);
-    } catch (_) {
-      currentQR = null;
-    }
-    emit('wa:qr', { qr: currentQR, status });
-    console.log('[WhatsApp] QR code generated — scan with your phone');
-  });
-
-  client.on('authenticated', () => {
-    status = 'authenticated';
-    currentQR = null;
-    emit('wa:status', { status });
-    console.log('[WhatsApp] Authenticated');
-  });
-
-  client.on('ready', () => {
-    status = 'connected';
-    const info = client.info;
-    emit('wa:status', { status, phone: info?.wid?.user });
-    console.log('[WhatsApp] Ready:', info?.wid?.user);
-
-    db.prepare(`
-      INSERT OR REPLACE INTO whatsapp_sessions (id, phone, status, updated_at)
-      VALUES (1, ?, 'connected', datetime('now'))
-    `).run(info?.wid?.user || 'unknown');
-  });
-
-  client.on('disconnected', (reason) => {
-    status = 'disconnected';
-    emit('wa:status', { status, reason });
-    console.log('[WhatsApp] Disconnected:', reason);
-
-    db.prepare(`UPDATE whatsapp_sessions SET status='disconnected', updated_at=datetime('now') WHERE id=1`).run();
-  });
-
-  client.on('message', async (message) => {
-    await handleIncomingMessage(message);
-  });
-
-  await client.initialize();
-}
-
-async function handleIncomingMessage(message) {
-  const body = message.body?.trim();
-  if (!body) return;
-
-  const from = message.from; // e.g. "1234567890@c.us"
-  const phone = from.replace('@c.us', '').replace('@g.us', '');
-
-  console.log(`[WhatsApp] Message from ${phone}: ${body.substring(0, 80)}`);
-
-  // Check if this looks like an invoice creation request
-  const upperBody = body.toUpperCase();
-  const isInvoiceRequest =
-    upperBody.startsWith('INVOICE') ||
-    upperBody.startsWith('INV:') ||
-    upperBody.startsWith('CREATE INVOICE') ||
-    upperBody.includes('CLIENT:') ||
-    upperBody.includes('ITEM:') ||
-    upperBody.includes('PO:') ||
-    upperBody.includes('P.O.');
-
-  if (!isInvoiceRequest) {
-    // Help message
-    if (upperBody === 'HELP' || upperBody === 'HI' || upperBody === 'HELLO') {
-      await message.reply(getHelpMessage());
-    }
-    return;
-  }
-
+async function getStatus() {
+  const { token, configured } = getConfig();
+  if (!configured) return { status: 'not_configured' };
   try {
-    const parsed = parseInvoiceMessage(body, phone);
-    if (!parsed) {
-      await message.reply(
-        '❌ Could not parse your invoice request.\n\n' + getHelpMessage()
-      );
+    const res = await axios.get(`${baseUrl()}/getStateInstance/${token}`, { timeout: 8000 });
+    const state = res.data.stateInstance; // 'authorized' | 'notAuthorized' | 'blocked'
+    const status = state === 'authorized' ? 'connected' : 'disconnected';
+    emit('wa:status', { status });
+    return { status };
+  } catch (err) {
+    return { status: 'error', error: err.message };
+  }
+}
+
+async function getQR() {
+  const { token, configured } = getConfig();
+  if (!configured) return null;
+  try {
+    const res = await axios.get(`${baseUrl()}/qr/${token}`, { timeout: 10000 });
+    // Returns { type: 'qrCode', message: 'data:image/png;base64,...' }
+    if (res.data.type === 'qrCode') {
+      emit('wa:qr', { qr: res.data.message, status: 'qr_pending' });
+      return res.data.message;
+    }
+    if (res.data.type === 'alreadyLogged') {
+      emit('wa:status', { status: 'connected' });
+      return null;
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function sendMessage(phone, message) {
+  const { token } = getConfig();
+  const chatId = phone.includes('@') ? phone : `${phone}@c.us`;
+  await axios.post(`${baseUrl()}/sendMessage/${token}`, { chatId, message });
+}
+
+async function sendInvoicePDF(phone, invoiceNumber, pdfPath, clientName) {
+  const { token } = getConfig();
+  if (!fs.existsSync(pdfPath)) throw new Error('PDF file not found');
+  const chatId = phone.includes('@') ? phone : `${phone}@c.us`;
+
+  const form = new FormData();
+  form.append('chatId', chatId);
+  form.append('caption', `Invoice ${invoiceNumber} — ${clientName}\nThank you for your business!`);
+  form.append('file', fs.createReadStream(pdfPath), {
+    filename: `${invoiceNumber}.pdf`,
+    contentType: 'application/pdf'
+  });
+
+  await axios.post(`${baseUrl()}/sendFileByUpload/${token}`, form, {
+    headers: form.getHeaders(),
+    timeout: 30000
+  });
+}
+
+// Called by the /api/whatsapp/webhook POST route
+async function handleWebhook(body) {
+  try {
+    if (body.typeWebhook !== 'incomingMessageReceived') return;
+    if (body.messageData?.typeMessage !== 'textMessage') return;
+
+    const text = body.messageData?.textMessageData?.textMessage?.trim();
+    const from = body.senderData?.sender; // e.g. "60123456789@c.us"
+    const phone = from?.replace('@c.us', '').replace('@g.us', '');
+
+    if (!text || !phone) return;
+
+    console.log(`[WhatsApp] Message from ${phone}: ${text.substring(0, 80)}`);
+
+    const upper = text.toUpperCase();
+
+    // Help message
+    if (upper === 'HELP' || upper === 'HI' || upper === 'HELLO') {
+      await sendMessage(phone, getHelpMessage());
       return;
     }
 
-    // Generate invoice
+    // Invoice creation
+    const isInvoice = upper.startsWith('INVOICE') || upper.startsWith('INV:') ||
+      upper.includes('CLIENT:') || upper.includes('ITEM:') ||
+      upper.includes('PO:') || upper.includes('P.O.');
+
+    if (!isInvoice) return;
+
+    const parsed = parseInvoiceMessage(text, phone);
+    if (!parsed) {
+      await sendMessage(phone, '❌ Could not parse invoice.\n\n' + getHelpMessage());
+      return;
+    }
+
     const { createInvoice } = require('./routes/invoices');
     const invoice = await createInvoice({ ...parsed, source: 'whatsapp', whatsapp_phone: phone });
 
-    const replyMsg =
-      `✅ *Invoice Created Successfully!*\n\n` +
-      `📄 Invoice #: *${invoice.invoice_number}*\n` +
-      `👤 Client: ${invoice.client_name}\n` +
-      `💰 Total: ${invoice.currency_symbol}${Number(invoice.total).toFixed(2)}\n` +
+    const company = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
+    const sym = company?.currency_symbol || '$';
+
+    await sendMessage(phone,
+      `✅ *Invoice Created!*\n\n` +
+      `📄 #${invoice.invoice_number}\n` +
+      `👤 ${invoice.client_name}\n` +
+      `💰 Total: ${sym}${Number(invoice.total).toFixed(2)}\n` +
       `📅 Due: ${invoice.due_date || 'N/A'}\n\n` +
-      `Your invoice PDF is being sent...`;
+      `Sending your PDF now...`
+    );
 
-    await message.reply(replyMsg);
-
-    // Send PDF
     if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) {
-      const media = MessageMedia.fromFilePath(invoice.pdf_path);
-      await client.sendMessage(from, media, {
-        caption: `Invoice ${invoice.invoice_number} — ${invoice.client_name}`
-      });
+      await sendInvoicePDF(phone, invoice.invoice_number, invoice.pdf_path, invoice.client_name);
     }
-
   } catch (err) {
-    console.error('[WhatsApp] Error creating invoice:', err);
-    await message.reply('❌ Error creating invoice. Please try again or use the web app.');
+    console.error('[WhatsApp] Webhook error:', err.message);
   }
 }
 
 function getHelpMessage() {
   return (
     `📋 *Invoice App — How to Create an Invoice*\n\n` +
-    `Send a message in this format:\n\n` +
-    `INVOICE\n` +
-    `Client: John Doe\n` +
-    `Email: john@example.com\n` +
-    `Phone: +1234567890\n` +
-    `Address: 123 Main St\n` +
-    `PO: PO-2024-001\n` +
-    `Due: 2024-03-15\n` +
-    `Item: Web Design x1 @ 500\n` +
-    `Item: Hosting x12 @ 10\n` +
-    `Tax: 10\n` +
-    `Discount: 50\n` +
-    `Notes: Payment due within 30 days\n\n` +
+    `Send a message like:\n\n` +
+    `INVOICE\nClient: John Doe\nEmail: john@example.com\n` +
+    `Phone: +1234567890\nPO: PO-2024-001\nDue: 2024-03-15\n` +
+    `Item: Web Design x1 @ 500\nItem: Hosting x12 @ 10\n` +
+    `Tax: 10\nNotes: Payment in 30 days\n\n` +
     `You'll receive your PDF invoice automatically! 🚀`
   );
 }
 
-async function sendMessage(phone, message) {
-  if (!client || status !== 'connected') {
-    throw new Error('WhatsApp not connected');
-  }
-  const chatId = phone.includes('@') ? phone : `${phone}@c.us`;
-  return client.sendMessage(chatId, message);
-}
-
-async function sendInvoicePDF(phone, invoiceNumber, pdfPath, clientName) {
-  if (!client || status !== 'connected') {
-    throw new Error('WhatsApp not connected');
-  }
-  if (!fs.existsSync(pdfPath)) {
-    throw new Error('PDF file not found');
-  }
-  const chatId = phone.includes('@') ? phone : `${phone}@c.us`;
-  const media = MessageMedia.fromFilePath(pdfPath);
-  await client.sendMessage(chatId, media, {
-    caption: `📄 Invoice ${invoiceNumber} — ${clientName}\nThank you for your business!`
-  });
-}
-
+// Legacy stubs (used by routes)
+async function initialize() { return getQR(); }
 async function disconnect() {
-  if (client) {
-    await client.destroy();
-    client = null;
-    status = 'disconnected';
-    currentQR = null;
-  }
+  // Green API logout
+  const { token, configured } = getConfig();
+  if (!configured) return;
+  try {
+    await axios.get(`${baseUrl()}/logout/${token}`);
+  } catch (_) {}
 }
 
-module.exports = { initialize, sendMessage, sendInvoicePDF, getStatus, disconnect, setIO };
+module.exports = { initialize, sendMessage, sendInvoicePDF, getStatus, getQR, disconnect, setIO, handleWebhook };

@@ -3,15 +3,23 @@ const router = express.Router();
 const wa = require('../whatsapp');
 
 // GET /api/whatsapp/status
-router.get('/status', (req, res) => {
-  res.json(wa.getStatus());
+router.get('/status', async (req, res) => {
+  const status = await wa.getStatus();
+  res.json(status);
 });
 
-// POST /api/whatsapp/connect
+// GET /api/whatsapp/qr
+router.get('/qr', async (req, res) => {
+  const qr = await wa.getQR();
+  res.json({ qr });
+});
+
+// POST /api/whatsapp/connect  (fetch QR)
 router.post('/connect', async (req, res) => {
   try {
-    wa.initialize(); // fire-and-forget; QR sent via socket
-    res.json({ message: 'WhatsApp initialization started. Watch for QR code.' });
+    const qr = await wa.getQR();
+    const status = await wa.getStatus();
+    res.json({ ...status, qr });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -37,6 +45,12 @@ router.post('/send', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /api/whatsapp/webhook  ← Green API sends incoming messages here
+router.post('/webhook', async (req, res) => {
+  res.sendStatus(200); // Acknowledge immediately
+  await wa.handleWebhook(req.body);
 });
 
 module.exports = router;
