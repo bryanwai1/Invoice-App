@@ -14,6 +14,14 @@ const db = new Database(DB_PATH);
 // Enable WAL mode for better performance
 db.pragma('journal_mode = WAL');
 
+// Migrations — safely add columns if they don't exist
+const migrate = () => {
+  const cols = db.prepare("PRAGMA table_info(company_settings)").all().map(c => c.name);
+  if (!cols.includes('group_chat_id')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN group_chat_id TEXT");
+  }
+};
+
 // Create tables
 db.exec(`
   CREATE TABLE IF NOT EXISTS invoices (
@@ -79,6 +87,9 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 `);
+
+// Run migrations
+try { migrate(); } catch (_) {}
 
 // Insert default company settings if not exists
 const existing = db.prepare('SELECT id FROM company_settings WHERE id = 1').get();
