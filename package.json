@@ -1,0 +1,12 @@
+{
+  "name": "invoice-app",
+  "version": "1.0.0",
+  "description": "WhatsApp-powered Invoice App",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "start:backend": "cd backend && npm start",
+    "build": "cd frontend && npm run build"
+  }
+}
