@@ -99,7 +99,7 @@ async function handleWebhook(body) {
 
     // Auto-save group ID on first group message if not configured yet
     if (isGroup && !configuredGroup) {
-      db.prepare("UPDATE company_settings SET group_chat_id=?, updated_at=datetime('now') WHERE id=1")
+      db.prepare("UPDATE company_settings SET group_chat_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
         .run(chatId);
       console.log('[WhatsApp] Group ID auto-saved:', chatId);
     }

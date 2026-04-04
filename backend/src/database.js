@@ -46,8 +46,8 @@ db.exec(`
     source TEXT DEFAULT 'manual',
     whatsapp_phone TEXT,
     pdf_path TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
   );
 
   CREATE TABLE IF NOT EXISTS invoice_items (
@@ -75,7 +75,7 @@ db.exec(`
     next_invoice_number INTEGER DEFAULT 1000,
     bank_details TEXT,
     group_chat_id TEXT,
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
   );
 
   CREATE TABLE IF NOT EXISTS whatsapp_sessions (
@@ -83,8 +83,8 @@ db.exec(`
     phone TEXT,
     status TEXT DEFAULT 'disconnected',
     qr_code TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP)
   );
 `);
 

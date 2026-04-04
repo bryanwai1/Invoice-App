@@ -12,7 +12,7 @@ function nextInvoiceNumber() {
   const settings = db.prepare('SELECT invoice_prefix, next_invoice_number FROM company_settings WHERE id=1').get();
   const prefix = settings?.invoice_prefix || 'INV';
   const num = settings?.next_invoice_number || 1000;
-  db.prepare('UPDATE company_settings SET next_invoice_number=?, updated_at=datetime("now") WHERE id=1').run(num + 1);
+  db.prepare("UPDATE company_settings SET next_invoice_number=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(num + 1);
   const year = new Date().getFullYear();
   return `${prefix}-${year}-${String(num).padStart(4, '0')}`;
 }
@@ -81,7 +81,7 @@ async function createInvoice(data) {
     company || {}
   );
 
-  db.prepare('UPDATE invoices SET pdf_path=?, updated_at=datetime("now") WHERE id=?')
+  db.prepare('UPDATE invoices SET pdf_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
     .run(pdfPath, id);
 
   return {
@@ -173,7 +173,7 @@ router.put('/:id', async (req, res) => {
         client_name=?, client_email=?, client_phone=?, client_address=?,
         po_number=?, issue_date=?, due_date=?, subtotal=?, tax_rate=?,
         tax_amount=?, discount=?, total=?, notes=?, payment_terms=?,
-        status=?, updated_at=datetime('now')
+        status=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).run(
       client_name, client_email, client_phone, client_address,
@@ -200,7 +200,7 @@ router.put('/:id', async (req, res) => {
       validItems,
       company || {}
     );
-    db.prepare('UPDATE invoices SET pdf_path=?, updated_at=datetime("now") WHERE id=?').run(pdfPath, id);
+    db.prepare('UPDATE invoices SET pdf_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(pdfPath, id);
 
     res.json({ ...invoice, pdf_path: pdfPath, items: validItems });
   } catch (err) {
@@ -214,7 +214,7 @@ router.patch('/:id/status', (req, res) => {
   const { status } = req.body;
   const valid = ['draft', 'pending', 'paid', 'overdue', 'cancelled'];
   if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-  db.prepare("UPDATE invoices SET status=?, updated_at=datetime('now') WHERE id=?")
+  db.prepare("UPDATE invoices SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")
     .run(status, req.params.id);
   res.json({ success: true });
 });
@@ -259,7 +259,7 @@ router.post('/:id/send-whatsapp', async (req, res) => {
 
     // Update status to pending if draft
     if (invoice.status === 'draft') {
-      db.prepare("UPDATE invoices SET status='pending', updated_at=datetime('now') WHERE id=?")
+      db.prepare("UPDATE invoices SET status='pending', updated_at=CURRENT_TIMESTAMP WHERE id=?")
         .run(invoice.id);
     }
 
@@ -281,7 +281,7 @@ router.post('/:id/regenerate-pdf', async (req, res) => {
       items,
       company || {}
     );
-    db.prepare('UPDATE invoices SET pdf_path=?, updated_at=datetime("now") WHERE id=?')
+    db.prepare('UPDATE invoices SET pdf_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
       .run(pdfPath, invoice.id);
     res.json({ success: true, pdf_path: pdfPath });
   } catch (err) {

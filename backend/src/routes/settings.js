@@ -35,7 +35,7 @@ router.put('/', (req, res) => {
     UPDATE company_settings SET
       name=?, address=?, email=?, phone=?, website=?,
       currency_symbol=?, tax_rate=?, payment_terms=?,
-      invoice_prefix=?, bank_details=?, updated_at=datetime('now')
+      invoice_prefix=?, bank_details=?, updated_at=CURRENT_TIMESTAMP
     WHERE id=1
   `).run(
     name, address, email, phone, website,
@@ -52,7 +52,7 @@ router.post('/logo', upload.single('logo'), (req, res) => {
   const ext = path.extname(req.file.originalname) || '.png';
   const newPath = path.join(LOGO_DIR, `logo${ext}`);
   fs.renameSync(req.file.path, newPath);
-  db.prepare("UPDATE company_settings SET logo_path=?, updated_at=datetime('now') WHERE id=1")
+  db.prepare("UPDATE company_settings SET logo_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
     .run(newPath);
   res.json({ success: true, logo_path: newPath });
 });
