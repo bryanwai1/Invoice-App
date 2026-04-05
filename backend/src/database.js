@@ -41,6 +41,18 @@ const migrate = () => {
   if (!settingsCols.includes('bot_mode')) {
     db.exec("ALTER TABLE company_settings ADD COLUMN bot_mode TEXT DEFAULT 'all'");
   }
+  if (!settingsCols.includes('header_height')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN header_height TEXT DEFAULT 'normal'");
+  }
+  if (!settingsCols.includes('company_name_size')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN company_name_size TEXT DEFAULT 'auto'");
+  }
+  if (!settingsCols.includes('header_show_address')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN header_show_address INTEGER DEFAULT 1");
+  }
+  if (!settingsCols.includes('header_show_contact')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN header_show_contact INTEGER DEFAULT 1");
+  }
 
   const invoiceCols = db.prepare("PRAGMA table_info(invoices)").all().map(c => c.name);
   if (!invoiceCols.includes('drive_link')) {

@@ -91,20 +91,39 @@ function Footer({ invoice, company, brandColor }) {
 
 // ── Classic ───────────────────────────────────────────────────────────────────
 
+function classicNameSize(name, sizeKey) {
+  const map = { sm: 'text-sm', md: 'text-xl', lg: 'text-3xl' };
+  if (sizeKey && sizeKey !== 'auto') return map[sizeKey] || 'text-3xl';
+  const len = (name || '').length;
+  if (len <= 18) return 'text-3xl';
+  if (len <= 28) return 'text-2xl';
+  if (len <= 38) return 'text-xl';
+  return 'text-base';
+}
+
+function headerPaddingClass(h) {
+  return { compact: 'py-3', normal: 'py-5', spacious: 'py-8' }[h] || 'py-5';
+}
+
 function ClassicTemplate({ invoice, items, company, sym, brandColor, logoUrl }) {
+  const showAddress = company.header_show_address !== 0 && company.header_show_address !== false;
+  const showContact = company.header_show_contact !== 0 && company.header_show_contact !== false;
+  const nameSizeClass = classicNameSize(company.name, company.company_name_size);
+  const padClass = headerPaddingClass(company.header_height);
+
   return (
     <div className="font-sans">
       {/* Header band */}
-      <div className="flex items-start gap-4 px-8 py-6 text-white" style={{ background: brandColor }}>
+      <div className={`flex items-start gap-4 px-8 ${padClass} text-white`} style={{ background: brandColor }}>
         <div className="min-w-0 flex-1">
           {logoUrl
             ? <><img src={logoUrl} alt="Logo" className="h-14 object-contain mb-1" /><p className="text-xs font-semibold opacity-90">{company.name}</p></>
-            : <p className="text-2xl font-bold leading-tight break-words">{company.name}</p>
+            : <p className={`${nameSizeClass} font-bold leading-tight break-words`}>{company.name}</p>
           }
-          {company.address && <p className="text-xs opacity-75 mt-1 whitespace-pre-line">{company.address}</p>}
-          {company.email   && <p className="text-xs opacity-75">{company.email}</p>}
-          {company.phone   && <p className="text-xs opacity-75">{company.phone}</p>}
-          {company.website && <p className="text-xs opacity-75">{company.website}</p>}
+          {showAddress && company.address && <p className="text-xs opacity-75 mt-2 whitespace-pre-line">{company.address}</p>}
+          {showContact && company.email   && <p className="text-xs opacity-75 mt-0.5">{company.email}</p>}
+          {showContact && company.phone   && <p className="text-xs opacity-75">{company.phone}</p>}
+          {showContact && company.website && <p className="text-xs opacity-75">{company.website}</p>}
         </div>
         <div className="text-right shrink-0">
           <p className="text-3xl font-bold tracking-wide">INVOICE</p>

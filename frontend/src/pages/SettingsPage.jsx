@@ -91,6 +91,8 @@ export default function SettingsPage() {
     currency_symbol: '$', tax_rate: 0, payment_terms: 'Net 30',
     invoice_prefix: 'INV', bank_details: '', primary_color: '#1a56db',
     template_style: 'classic', logo_position: 'left', header_layout: null,
+    header_height: 'normal', company_name_size: 'auto',
+    header_show_address: true, header_show_contact: true,
   });
   const [logoUrl, setLogoUrl] = useState(null);
   const [driveConnected, setDriveConnected] = useState(false);
@@ -117,6 +119,10 @@ export default function SettingsPage() {
         template_style: d.template_style || 'classic',
         logo_position: d.logo_position || 'left',
         header_layout: d.header_layout || null,
+        header_height: d.header_height || 'normal',
+        company_name_size: d.company_name_size || 'auto',
+        header_show_address: d.header_show_address !== 0 && d.header_show_address !== false,
+        header_show_contact: d.header_show_contact !== 0 && d.header_show_contact !== false,
       });
       if (d.logo_url) setLogoUrl(`${BASE}${d.logo_url}?t=${Date.now()}`);
       setDriveConnected(!!d.drive_connected);
@@ -275,6 +281,83 @@ export default function SettingsPage() {
               layout={form.header_layout}
               onChange={(newLayout) => setField('header_layout', newLayout)}
             />
+          </div>
+        )}
+
+        {/* Header design controls — Classic only */}
+        {form.template_style === 'classic' && (
+          <div className="mb-5 space-y-4">
+            <p className="text-sm font-semibold text-gray-700">Header Design</p>
+
+            {/* Company name size */}
+            <div>
+              <label className="label">Company Name Size</label>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { v: 'auto', label: 'Auto',  hint: 'Shrinks if long' },
+                  { v: 'sm',   label: 'Small',  hint: '11pt' },
+                  { v: 'md',   label: 'Medium', hint: '16pt' },
+                  { v: 'lg',   label: 'Large',  hint: '22pt' },
+                ].map(({ v, label, hint }) => (
+                  <button key={v} type="button"
+                    onClick={() => setField('company_name_size', v)}
+                    title={hint}
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                      form.company_name_size === v
+                        ? 'text-white border-transparent'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                    }`}
+                    style={form.company_name_size === v ? { background: form.primary_color } : {}}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Auto shrinks the font when your company name is long — fixes text overlapping the address.</p>
+            </div>
+
+            {/* Header height */}
+            <div>
+              <label className="label">Header Height</label>
+              <div className="flex gap-2">
+                {[
+                  { v: 'compact',   label: 'Compact' },
+                  { v: 'normal',    label: 'Normal' },
+                  { v: 'spacious',  label: 'Spacious' },
+                ].map(({ v, label }) => (
+                  <button key={v} type="button"
+                    onClick={() => setField('header_height', v)}
+                    className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
+                      form.header_height === v
+                        ? 'text-white border-transparent'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                    }`}
+                    style={form.header_height === v ? { background: form.primary_color } : {}}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Show/hide toggles */}
+            <div>
+              <label className="label">Show in Header</label>
+              <div className="flex flex-col gap-2">
+                {[
+                  { key: 'header_show_address', label: 'Company Address' },
+                  { key: 'header_show_contact', label: 'Email & Phone' },
+                ].map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-3 cursor-pointer select-none">
+                    <div
+                      onClick={() => setField(key, !form[key])}
+                      className={`relative w-10 h-5 rounded-full transition-colors ${form[key] ? 'bg-primary-600' : 'bg-gray-300'}`}
+                      style={form[key] ? { background: form.primary_color } : {}}>
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </div>
+                    <span className="text-sm text-gray-700">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

@@ -110,13 +110,37 @@ function drawFooter(doc, invoice, company) {
 
 // ── Template: Classic ─────────────────────────────────────────────────────────
 
+// Estimate rendered line count for a string at a given font size and column width
+function estimateLines(text, fontSize, colWidth) {
+  const avgCharW = fontSize * 0.52; // Helvetica average
+  const charsPerLine = Math.max(1, Math.floor(colWidth / avgCharW));
+  return Math.max(1, Math.ceil(text.length / charsPerLine));
+}
+
+// Resolve company name font size — 'auto' shrinks for long names
+function resolveNameFontSize(name, sizeKey) {
+  const map = { sm: 11, md: 16, lg: 22 };
+  if (sizeKey && sizeKey !== 'auto') return map[sizeKey] || 22;
+  const len = (name || '').length;
+  if (len <= 18) return 22;
+  if (len <= 28) return 17;
+  if (len <= 38) return 13;
+  return 11;
+}
+
 function renderClassic(doc, invoice, items, company) {
   const primary = company.primary_color || '#1a56db';
   const pageW = doc.page.width;
   const margin = 50;
   const position = company.logo_position || 'left';
 
-  // Per-invoice layout positions saved from the drag editor, with sensible defaults
+  // Design settings
+  const headerHeightMap = { compact: 110, normal: 130, spacious: 160 };
+  const headerH = headerHeightMap[company.header_height] || 130;
+  const showAddress = company.header_show_address !== 0 && company.header_show_address !== false;
+  const showContact = company.header_show_contact !== 0 && company.header_show_contact !== false;
+
+  // Layout positions from drag editor
   const layout = company.header_layout
     ? (typeof company.header_layout === 'string' ? JSON.parse(company.header_layout) : company.header_layout)
     : {};
@@ -125,26 +149,33 @@ function renderClassic(doc, invoice, items, company) {
   const titleX   = layout.title_x   ?? 350;
   const titleY   = layout.title_y   ?? 28;
 
-  // Header band
-  doc.rect(0, 0, pageW, 130).fill(primary);
+  // Header band — dynamic height
+  doc.rect(0, 0, pageW, headerH).fill(primary);
 
-  // Company name / logo — constrained width so it never overlaps the title block
-  const hasLogo = company.logo_path && fs.existsSync(company.logo_path);
+  const hasLogo  = company.logo_path && fs.existsSync(company.logo_path);
   const leftColW = Math.max(100, titleX - companyX - 10);
+  const nameFontSize = resolveNameFontSize(company.name, company.company_name_size);
+
+  let infoY;
   if (hasLogo) {
     const lx = logoX(position, 130, pageW / 2, companyX);
     drawLogo(doc, company, lx, companyY + 6, 55);
     doc.fontSize(9).fillColor('rgba(255,255,255,0.9)').font('Helvetica-Bold')
       .text(company.name, companyX, companyY + 66, { width: leftColW });
+    infoY = companyY + 82;
   } else {
-    doc.fontSize(22).fillColor('#fff').font('Helvetica-Bold')
+    doc.fontSize(nameFontSize).fillColor('#fff').font('Helvetica-Bold')
       .text(company.name, companyX, companyY, { width: leftColW });
+    // Dynamically calculate infoY based on how many lines the name actually takes
+    const nameLines = estimateLines(company.name || '', nameFontSize, leftColW);
+    const nameBlockH = nameLines * (nameFontSize * 1.25);
+    infoY = companyY + nameBlockH + 8;
   }
+
   doc.fontSize(9).fillColor('rgba(255,255,255,0.8)').font('Helvetica');
-  let infoY = hasLogo ? companyY + 78 : companyY + 34;
-  if (company.address) { doc.text(company.address, companyX, infoY, { width: leftColW }); infoY += 11; }
-  if (company.email)   { doc.text(company.email,   companyX, infoY, { width: leftColW }); infoY += 11; }
-  if (company.phone)   { doc.text(company.phone,   companyX, infoY, { width: leftColW }); }
+  if (showAddress && company.address) { doc.text(company.address, companyX, infoY, { width: leftColW }); infoY += 12; }
+  if (showContact && company.email)   { doc.text(company.email,   companyX, infoY, { width: leftColW }); infoY += 11; }
+  if (showContact && company.phone)   { doc.text(company.phone,   companyX, infoY, { width: leftColW }); }
 
   // Invoice label — right column, position from drag editor
   const rightColW = pageW - titleX - margin;
@@ -153,13 +184,14 @@ function renderClassic(doc, invoice, items, company) {
   doc.fontSize(10).fillColor('rgba(255,255,255,0.9)').font('Helvetica')
     .text(`#${invoice.invoice_number}`, titleX, titleY + 36, { align: 'right', width: rightColW });
 
-  // Status badge
-  doc.roundedRect(margin, 142, 70, 20, 10).fill(statusColor(invoice.status));
+  // Status badge — sits just below header band
+  const badgeY = headerH + 12;
+  doc.roundedRect(margin, badgeY, 70, 20, 10).fill(statusColor(invoice.status));
   doc.fontSize(9).fillColor('#fff').font('Helvetica-Bold')
-    .text(invoice.status.toUpperCase(), margin, 147, { width: 70, align: 'center' });
+    .text(invoice.status.toUpperCase(), margin, badgeY + 5, { width: 70, align: 'center' });
 
   // Meta (right side)
-  const metaY = 142; const metaX = 350;
+  const metaY = badgeY; const metaX = 350;
   doc.fontSize(9).fillColor('#6b7280').font('Helvetica')
     .text('Issue Date:', metaX, metaY,      { width: 90 })
     .text('Due Date:',   metaX, metaY + 16, { width: 90 })
@@ -170,7 +202,7 @@ function renderClassic(doc, invoice, items, company) {
     .text(invoice.po_number  || '-', metaX + 90, metaY + 32, { width: 105, align: 'right' });
 
   // Bill To
-  const billY = 190;
+  const billY = headerH + 60;
   doc.rect(margin, billY, 240, 14).fill('#f9fafb');
   doc.fontSize(9).fillColor('#6b7280').font('Helvetica-Bold').text('BILL TO', margin + 8, billY + 3);
   doc.fontSize(13).fillColor('#111827').font('Helvetica-Bold').text(invoice.client_name, margin, billY + 20);
@@ -181,7 +213,7 @@ function renderClassic(doc, invoice, items, company) {
   if (invoice.client_phone)   { doc.text(invoice.client_phone,   margin, cy, { width: 240 }); }
 
   // Items table
-  const afterTable = drawItemsTable(doc, items, company, 285);
+  const afterTable = drawItemsTable(doc, items, company, headerH + 155);
 
   // Totals
   drawTotals(doc, invoice, company, 380, afterTable + 16);

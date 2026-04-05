@@ -129,7 +129,9 @@ router.put('/', (req, res) => {
     name, address, email, phone, website,
     currency_symbol, tax_rate, payment_terms,
     invoice_prefix, bank_details, primary_color,
-    template_style, logo_position, header_layout
+    template_style, logo_position, header_layout,
+    header_height, company_name_size,
+    header_show_address, header_show_contact,
   } = req.body;
 
   db.prepare(`
@@ -138,6 +140,8 @@ router.put('/', (req, res) => {
       currency_symbol=?, tax_rate=?, payment_terms=?,
       invoice_prefix=?, bank_details=?, primary_color=?,
       template_style=?, logo_position=?, header_layout=?,
+      header_height=?, company_name_size=?,
+      header_show_address=?, header_show_contact=?,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=1
   `).run(
@@ -147,7 +151,11 @@ router.put('/', (req, res) => {
     primary_color || '#1a56db',
     template_style || 'classic',
     logo_position || 'left',
-    header_layout ? JSON.stringify(header_layout) : null
+    header_layout ? JSON.stringify(header_layout) : null,
+    header_height || 'normal',
+    company_name_size || 'auto',
+    header_show_address === false || header_show_address === 0 ? 0 : 1,
+    header_show_contact === false || header_show_contact === 0 ? 0 : 1,
   );
 
   res.json({ success: true });
