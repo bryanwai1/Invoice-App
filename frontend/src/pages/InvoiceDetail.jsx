@@ -2,14 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { invoiceApi } from '../api';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
 import {
   ArrowLeft, Download, Edit, Trash2, Send,
   MessageCircle, RefreshCw, CheckCircle, ExternalLink
 } from 'lucide-react';
-
-const BASE = import.meta.env.VITE_API_URL || '';
 import StatusBadge from '../components/StatusBadge';
+import InvoicePreview from '../components/InvoicePreview';
 
 const STATUSES = ['draft', 'pending', 'paid', 'overdue', 'cancelled'];
 
@@ -78,9 +76,6 @@ export default function InvoiceDetail() {
   if (!data) return <div className="p-6 text-red-500">Invoice not found.</div>;
 
   const { items = [], company = {} } = data;
-  const sym = company.currency_symbol || '$';
-  const brandColor = company.primary_color || '#1a56db';
-  const logoUrl = company.logo_path ? `${BASE}/api/settings/logo` : null;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -124,107 +119,8 @@ export default function InvoiceDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Invoice Preview */}
-        <div className="lg:col-span-2 space-y-5">
-
-          {/* Header */}
-          <div className="card overflow-hidden">
-            <div className="p-6 text-white flex items-start gap-4" style={{ background: brandColor }}>
-              <div className="min-w-0 flex-1">
-                {logoUrl
-                  ? <img src={logoUrl} alt="Logo" className="h-10 object-contain mb-1" />
-                  : <p className="text-lg font-bold leading-tight break-words">{company.name || 'My Company'}</p>
-                }
-                {logoUrl && <p className="text-xs font-semibold opacity-90">{company.name}</p>}
-                {company.address && <p className="text-xs opacity-75 mt-0.5">{company.address}</p>}
-                {company.email && <p className="text-xs opacity-75">{company.email}</p>}
-                {company.phone && <p className="text-xs opacity-75">{company.phone}</p>}
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-2xl font-bold">INVOICE</p>
-                <p className="text-sm opacity-90">#{data.invoice_number}</p>
-                {data.po_number && <p className="text-xs opacity-75 mt-1">PO: {data.po_number}</p>}
-              </div>
-            </div>
-
-            <div className="p-6 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase mb-1">Bill To</p>
-                <p className="font-semibold text-gray-900">{data.client_name}</p>
-                {data.client_email && <p className="text-sm text-gray-500">{data.client_email}</p>}
-                {data.client_phone && <p className="text-sm text-gray-500">{data.client_phone}</p>}
-                {data.client_address && <p className="text-sm text-gray-500 whitespace-pre-line">{data.client_address}</p>}
-              </div>
-              <div className="text-right text-sm">
-                <div className="space-y-1">
-                  <div className="flex justify-end gap-4">
-                    <span className="text-gray-500">Issue Date:</span>
-                    <span className="font-medium">
-                      {data.issue_date ? format(new Date(data.issue_date), 'MMM d, yyyy') : '—'}
-                    </span>
-                  </div>
-                  <div className="flex justify-end gap-4">
-                    <span className="text-gray-500">Due Date:</span>
-                    <span className="font-medium">
-                      {data.due_date ? format(new Date(data.due_date), 'MMM d, yyyy') : '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Items */}
-            <div className="px-6 pb-4">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-white" style={{ background: brandColor }}>
-                    <th className="text-left px-3 py-2 rounded-tl-lg">Description</th>
-                    <th className="text-center px-3 py-2">Qty</th>
-                    <th className="text-right px-3 py-2">Unit Price</th>
-                    <th className="text-right px-3 py-2 rounded-tr-lg">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-3 py-2.5 text-gray-900">{item.description}</td>
-                      <td className="px-3 py-2.5 text-center text-gray-600">{item.quantity}</td>
-                      <td className="px-3 py-2.5 text-right text-gray-600">{sym}{Number(item.unit_price).toFixed(2)}</td>
-                      <td className="px-3 py-2.5 text-right font-medium text-gray-900">{sym}{Number(item.amount).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Totals */}
-              <div className="mt-4 flex justify-end">
-                <div className="w-56 space-y-1 text-sm">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span><span>{sym}{Number(data.subtotal).toFixed(2)}</span>
-                  </div>
-                  {data.discount > 0 && (
-                    <div className="flex justify-between text-gray-600">
-                      <span>Discount</span><span>-{sym}{Number(data.discount).toFixed(2)}</span>
-                    </div>
-                  )}
-                  {data.tax_rate > 0 && (
-                    <div className="flex justify-between text-gray-600">
-                      <span>Tax ({data.tax_rate}%)</span><span>{sym}{Number(data.tax_amount).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-base text-white px-3 py-1.5 rounded-lg" style={{ background: brandColor }}>
-                    <span>Total</span><span>{sym}{Number(data.total).toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {data.notes && (
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs font-medium text-gray-500 mb-1">Notes</p>
-                  <p className="text-sm text-gray-700">{data.notes}</p>
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="lg:col-span-2">
+          <InvoicePreview invoice={data} items={items} company={company} />
         </div>
 
         {/* Sidebar */}
