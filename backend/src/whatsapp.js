@@ -3,7 +3,7 @@ const fs = require('fs');
 const FormData = require('form-data');
 const db = require('./database');
 const { parseInvoiceMessage } = require('./messageParser');
-const { extractInvoiceFromText } = require('./aiParser');
+const { extractInvoiceFromText, extractRetrievalQuery } = require('./aiParser');
 const { transcribeAudio } = require('./voiceTranscriber');
 
 let io = null;
@@ -71,6 +71,130 @@ async function sendInvoicePDF(phone, invoiceNumber, pdfPath, clientName) {
   await axios.post(`${baseUrl()}/sendFileByUpload/${token}`, form, {
     headers: form.getHeaders(), timeout: 30000
   });
+}
+
+// ── Retrieval helpers ─────────────────────────────────────────────────────────
+
+// Returns true when the message is clearly asking to retrieve/resend an invoice
+function isRetrievalRequest(text) {
+  const t = text.toLowerCase();
+  const retrieveWords = ['send me', 'resend', 'retrieve', 'get me', 'find', 'look up',
+    'fetch', 'share', 'forward', 'can you send', 'can i get', 'send the invoice',
+    'get the invoice', 'find the invoice', 'pull up'];
+  const hasRetrieve = retrieveWords.some(w => t.includes(w));
+  const hasInvoice  = t.includes('invoice') || t.includes('receipt') || /\bINV-?\d/i.test(text);
+  return hasRetrieve && hasInvoice;
+}
+
+// Search the SQLite DB for invoices matching the query
+function searchInvoicesDB(query, type) {
+  const like = `%${query}%`;
+
+  if (type === 'number') {
+    const exact = db.prepare('SELECT * FROM invoices WHERE UPPER(invoice_number)=? LIMIT 1').get(query.toUpperCase());
+    if (exact) return [exact];
+  }
+
+  if (type === 'po') {
+    const rows = db.prepare('SELECT * FROM invoices WHERE UPPER(po_number)=? ORDER BY created_at DESC LIMIT 5').all(query.toUpperCase());
+    if (rows.length) return rows;
+  }
+
+  // Client name fuzzy search
+  const byClient = db.prepare(
+    'SELECT * FROM invoices WHERE client_name LIKE ? ORDER BY created_at DESC LIMIT 5'
+  ).all(like);
+  if (byClient.length) return byClient;
+
+  // Invoice number fuzzy
+  const byNum = db.prepare(
+    'SELECT * FROM invoices WHERE invoice_number LIKE ? ORDER BY created_at DESC LIMIT 5'
+  ).all(like);
+  if (byNum.length) return byNum;
+
+  // Fallback: any field
+  return db.prepare(
+    'SELECT * FROM invoices WHERE client_name LIKE ? OR invoice_number LIKE ? OR po_number LIKE ? ORDER BY created_at DESC LIMIT 5'
+  ).all(like, like, like);
+}
+
+// Ensure the invoice has a PDF on disk; regenerate if missing
+async function ensurePDF(invoice) {
+  if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) return invoice.pdf_path;
+
+  // Regenerate
+  const { generatePDF } = require('./invoiceGenerator');
+  const items   = db.prepare('SELECT * FROM invoice_items WHERE invoice_id=?').all(invoice.id);
+  const company = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
+  const pdfPath = await generatePDF(
+    { ...invoice, currency_symbol: company?.currency_symbol || '$' },
+    items,
+    company || {}
+  );
+  db.prepare('UPDATE invoices SET pdf_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(pdfPath, invoice.id);
+  return pdfPath;
+}
+
+// Main retrieval handler — called when the message looks like a retrieval request
+async function handleRetrieval(chatId, text) {
+  const company = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
+  const sym     = company?.currency_symbol || '$';
+
+  // Extract search terms
+  const { query, type } = await extractRetrievalQuery(text);
+  if (!query) {
+    await sendMessage(chatId,
+      '🔍 I couldn\'t figure out which invoice you need.\n\n' +
+      'Try: _"Send me the invoice for Acme Corp"_ or _"Resend INV-2024-1001"_'
+    );
+    return;
+  }
+
+  const results = searchInvoicesDB(query, type);
+
+  if (!results.length) {
+    await sendMessage(chatId,
+      `🔍 No invoices found matching *"${query}"*.\n\nDouble-check the client name or invoice number and try again.`
+    );
+    return;
+  }
+
+  // Multiple results — list them and send the most recent one
+  if (results.length > 1) {
+    const list = results.map((inv, i) =>
+      `${i + 1}. *${inv.invoice_number}* — ${inv.client_name} — ${sym}${Number(inv.total).toFixed(2)} — _${inv.status}_`
+    ).join('\n');
+    await sendMessage(chatId,
+      `🔍 Found ${results.length} invoices matching *"${query}"*:\n\n${list}\n\nSending the most recent one now...`
+    );
+  }
+
+  const invoice = results[0];
+
+  // Check Google Drive link first (fastest — no file needed)
+  if (invoice.drive_link) {
+    await sendMessage(chatId,
+      `📄 *${invoice.invoice_number}*\n` +
+      `👤 ${invoice.client_name}\n` +
+      `💰 ${sym}${Number(invoice.total).toFixed(2)} — _${invoice.status}_\n\n` +
+      `🔗 Google Drive: ${invoice.drive_link}`
+    );
+    return;
+  }
+
+  // Fall back to sending the PDF file directly
+  try {
+    const pdfPath = await ensurePDF(invoice);
+    await sendMessage(chatId,
+      `📄 Found it! Sending *${invoice.invoice_number}* for *${invoice.client_name}*...`
+    );
+    await sendInvoicePDF(chatId, invoice.invoice_number, pdfPath, invoice.client_name);
+  } catch (err) {
+    console.error('[WhatsApp] Retrieval send failed:', err.message);
+    await sendMessage(chatId,
+      `⚠️ Found the invoice but couldn't send the PDF: ${err.message}\n\nCheck the web app for the details.`
+    );
+  }
 }
 
 // ── Main webhook handler
@@ -167,6 +291,12 @@ async function handleWebhook(body) {
       return;
     }
 
+    // ── Retrieval request — find & resend an existing invoice
+    if (isRetrievalRequest(text)) {
+      await handleRetrieval(chatId, text);
+      return;
+    }
+
     // ── Parse invoice — try structured format first, then AI
     let parsed = parseInvoiceMessage(text, senderPhone);
 
@@ -224,11 +354,13 @@ async function handleWebhook(body) {
 function getHelpMessage() {
   return (
     `📋 *Invoice App — Voice or Type*\n\n` +
-    `You can speak or type naturally, for example:\n\n` +
-    `_"Create invoice for John Doe, web design 1500, hosting 12 months at 25 each, due next month"_\n\n` +
-    `Or use the structured format:\n` +
-    `INVOICE\nClient: John Doe\nItem: Web Design x1 @ 1500\nDue: 2024-05-01\n\n` +
-    `Commands: HELP · STATUS`
+    `*Create an invoice:*\n` +
+    `_"Invoice for Acme Corp, web design 1500, hosting 25/month x12, due next month"_\n\n` +
+    `*Retrieve & resend an existing invoice:*\n` +
+    `_"Send me the invoice for Acme Corp"_\n` +
+    `_"Resend INV-2024-1001"_\n` +
+    `_"Find the latest invoice for John"_\n\n` +
+    `*Commands:* HELP · STATUS`
   );
 }
 
