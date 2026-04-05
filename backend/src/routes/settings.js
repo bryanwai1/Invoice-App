@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
-const { isDriveConfigured } = require('../googleDrive');
+const { getAuthUrl, exchangeCode, isDriveOAuthConfigured } = require('../googleDrive');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -23,7 +23,8 @@ router.get('/', (req, res) => {
   const settings = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
   res.json({
     ...(settings || {}),
-    drive_configured: isDriveConfigured(),
+    drive_oauth_configured: isDriveOAuthConfigured(),
+    drive_connected: !!(settings?.google_refresh_token),
     logo_url: (settings?.logo_path && fs.existsSync(settings.logo_path)) ? '/api/settings/logo' : null,
   });
 });
@@ -35,6 +36,80 @@ router.get('/logo', (req, res) => {
     return res.status(404).json({ error: 'No logo uploaded' });
   }
   res.sendFile(settings.logo_path);
+});
+
+// GET /api/settings/drive-auth — redirect user to Google consent screen
+router.get('/drive-auth', (req, res) => {
+  if (!isDriveOAuthConfigured()) {
+    return res.status(500).send('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set in Render environment.');
+  }
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/settings/drive-callback`;
+  const url = getAuthUrl(redirectUri);
+  res.redirect(url);
+});
+
+// GET /api/settings/drive-callback — Google redirects here after user consents
+router.get('/drive-callback', async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.send(`Google auth error: ${error}`);
+  if (!code) return res.status(400).send('No authorization code received.');
+
+  try {
+    const redirectUri = `${req.protocol}://${req.get('host')}/api/settings/drive-callback`;
+    const tokens = await exchangeCode(code, redirectUri);
+
+    if (!tokens.refresh_token) {
+      return res.send(`
+        <p>⚠️ No refresh token received.</p>
+        <p>Go to <a href="https://myaccount.google.com/permissions">Google Account Permissions</a>,
+        remove "<strong>InvoiceApp</strong>" access, then
+        <a href="/api/settings/drive-auth">try connecting again</a>.</p>
+      `);
+    }
+
+    db.prepare('UPDATE company_settings SET google_refresh_token=?, updated_at=CURRENT_TIMESTAMP WHERE id=1')
+      .run(tokens.refresh_token);
+
+    // Redirect back to frontend settings page
+    const frontendUrl = process.env.FRONTEND_URL || '';
+    const base = frontendUrl.startsWith('http') ? frontendUrl : `https://${frontendUrl}`;
+    res.redirect(`${base}/settings?drive=connected`);
+  } catch (err) {
+    console.error('[Drive] OAuth callback error:', err.message);
+    res.status(500).send(`OAuth error: ${err.message}`);
+  }
+});
+
+// POST /api/settings/drive-disconnect
+router.post('/drive-disconnect', (req, res) => {
+  db.prepare('UPDATE company_settings SET google_refresh_token=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=1').run();
+  res.json({ success: true });
+});
+
+// GET /api/settings/drive-test
+router.get('/drive-test', async (req, res) => {
+  const settings = db.prepare('SELECT google_refresh_token FROM company_settings WHERE id=1').get();
+  if (!isDriveOAuthConfigured()) return res.json({ ok: false, error: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set' });
+  if (!settings?.google_refresh_token) return res.json({ ok: false, error: 'Not connected — click Connect Google Drive in Settings' });
+
+  try {
+    const { google } = require('googleapis');
+    const { makeOAuth2Client } = require('../googleDrive');
+    // Use a quick files.list to verify token works
+    const { GoogleAuth } = require('google-auth-library');
+    const { uploadInvoiceToDrive } = require('../googleDrive');
+
+    // Write a tiny temp file and upload it
+    const tmpPath = path.join(__dirname, '..', '..', 'data', '_drive_test.txt');
+    fs.writeFileSync(tmpPath, `Drive test ${new Date().toISOString()}`);
+    const link = await uploadInvoiceToDrive('_drive_test', tmpPath, settings.google_refresh_token);
+    fs.unlinkSync(tmpPath);
+
+    if (link) return res.json({ ok: true, test_link: link });
+    return res.json({ ok: false, error: 'Upload returned null — check Render logs for [Drive] error' });
+  } catch (err) {
+    return res.json({ ok: false, error: err.message });
+  }
 });
 
 // PUT /api/settings
@@ -60,35 +135,6 @@ router.put('/', (req, res) => {
   );
 
   res.json({ success: true });
-});
-
-// GET /api/settings/drive-test — diagnose Drive connection + do a real upload test
-router.get('/drive-test', async (req, res) => {
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON not set' });
-  if (!process.env.GOOGLE_DRIVE_FOLDER_ID) return res.json({ ok: false, error: 'GOOGLE_DRIVE_FOLDER_ID not set' });
-  try { JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON); }
-  catch { return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON' }); }
-  try {
-    const { google } = require('googleapis');
-    const { Readable } = require('stream');
-    const key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    const auth = new google.auth.GoogleAuth({ credentials: key, scopes: ['https://www.googleapis.com/auth/drive.file'] });
-    const drive = google.drive({ version: 'v3', auth });
-
-    // Try an actual file upload
-    const testContent = `Invoice App drive test - ${new Date().toISOString()}`;
-    const stream = Readable.from([testContent]);
-    const file = await drive.files.create({
-      requestBody: { name: '_drive_test.txt', parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] },
-      media: { mimeType: 'text/plain', body: stream },
-      fields: 'id, webViewLink',
-    });
-    // Clean up test file
-    await drive.files.delete({ fileId: file.data.id }).catch(() => {});
-    return res.json({ ok: true, upload_works: true, folder_id: process.env.GOOGLE_DRIVE_FOLDER_ID });
-  } catch (err) {
-    return res.json({ ok: false, error: err.message });
-  }
 });
 
 // POST /api/settings/logo

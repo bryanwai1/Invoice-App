@@ -23,6 +23,9 @@ const migrate = () => {
   if (!settingsCols.includes('primary_color')) {
     db.exec("ALTER TABLE company_settings ADD COLUMN primary_color TEXT DEFAULT '#1a56db'");
   }
+  if (!settingsCols.includes('google_refresh_token')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN google_refresh_token TEXT");
+  }
 
   const invoiceCols = db.prepare("PRAGMA table_info(invoices)").all().map(c => c.name);
   if (!invoiceCols.includes('drive_link')) {

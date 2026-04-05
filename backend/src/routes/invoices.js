@@ -82,8 +82,8 @@ async function createInvoice(data) {
     company || {}
   );
 
-  // Upload to Google Drive (non-blocking — fails silently if not configured)
-  const driveLink = await uploadInvoiceToDrive(invoice_number, pdfPath).catch(() => null);
+  // Upload to Google Drive using stored OAuth refresh token
+  const driveLink = await uploadInvoiceToDrive(invoice_number, pdfPath, company?.google_refresh_token).catch(() => null);
 
   db.prepare('UPDATE invoices SET pdf_path=?, drive_link=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
     .run(pdfPath, driveLink || null, id);
@@ -286,7 +286,7 @@ router.post('/:id/regenerate-pdf', async (req, res) => {
       items,
       company || {}
     );
-    const driveLink = await uploadInvoiceToDrive(invoice.invoice_number, pdfPath).catch(() => null);
+    const driveLink = await uploadInvoiceToDrive(invoice.invoice_number, pdfPath, company?.google_refresh_token).catch(() => null);
     db.prepare('UPDATE invoices SET pdf_path=?, drive_link=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
       .run(pdfPath, driveLink || null, invoice.id);
     res.json({ success: true, pdf_path: pdfPath, drive_link: driveLink });

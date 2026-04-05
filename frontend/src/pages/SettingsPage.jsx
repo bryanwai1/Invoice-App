@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { settingsApi } from '../api';
 import toast from 'react-hot-toast';
-import { Save, Upload, Palette, HardDrive, CheckCircle, XCircle } from 'lucide-react';
+import { Save, Upload, Palette, CheckCircle, XCircle, Link, LinkOff } from 'lucide-react';
 
 const BASE = import.meta.env.VITE_API_URL || '';
 
@@ -12,9 +12,11 @@ export default function SettingsPage() {
     invoice_prefix: 'INV', bank_details: '', primary_color: '#1a56db'
   });
   const [logoUrl, setLogoUrl] = useState(null);
-  const [driveConfigured, setDriveConfigured] = useState(false);
+  const [driveConnected, setDriveConnected] = useState(false);
+  const [driveOAuthConfigured, setDriveOAuthConfigured] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     settingsApi.get().then(r => {
@@ -33,7 +35,8 @@ export default function SettingsPage() {
         primary_color: d.primary_color || '#1a56db',
       });
       if (d.logo_url) setLogoUrl(`${BASE}${d.logo_url}?t=${Date.now()}`);
-      setDriveConfigured(!!d.drive_configured);
+      setDriveConnected(!!d.drive_connected);
+      setDriveOAuthConfigured(!!d.drive_oauth_configured);
     });
   }, []);
 
@@ -215,37 +218,58 @@ export default function SettingsPage() {
 
       <Section title="☁️ Google Drive Integration">
         <div className="flex items-start gap-3 mb-4">
-          {driveConfigured
+          {driveConnected
             ? <CheckCircle size={20} className="text-emerald-500 mt-0.5 shrink-0" />
             : <XCircle size={20} className="text-gray-400 mt-0.5 shrink-0" />
           }
-          <div>
+          <div className="flex-1">
             <p className="font-medium text-sm text-gray-900">
-              {driveConfigured ? 'Connected — invoices will auto-save to Drive' : 'Not configured'}
+              {driveConnected ? '✅ Connected — invoices auto-save to Google Drive' : 'Not connected'}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {driveConfigured
-                ? 'Each new invoice PDF is automatically uploaded to your Google Drive folder.'
-                : 'Add two environment variables in Render to enable auto-upload.'}
+              {driveConnected
+                ? 'Every new invoice PDF is uploaded to your Google Drive folder automatically.'
+                : 'Connect your Google account to auto-upload invoice PDFs to Drive.'}
             </p>
           </div>
         </div>
 
-        {!driveConfigured && (
+        {driveConnected ? (
+          <button type="button" disabled={disconnecting}
+            onClick={async () => {
+              setDisconnecting(true);
+              try {
+                await fetch(`${BASE}/api/settings/drive-disconnect`, { method: 'POST' });
+                setDriveConnected(false);
+                toast.success('Google Drive disconnected');
+              } catch { toast.error('Failed to disconnect'); }
+              finally { setDisconnecting(false); }
+            }}
+            className="btn-secondary text-red-600 border-red-200 hover:bg-red-50">
+            <LinkOff size={15} /> {disconnecting ? 'Disconnecting...' : 'Disconnect Google Drive'}
+          </button>
+        ) : driveOAuthConfigured ? (
+          <a href={`${BASE}/api/settings/drive-auth`}
+            className="btn-primary inline-flex items-center gap-2">
+            <Link size={15} /> Connect Google Drive
+          </a>
+        ) : (
           <div className="space-y-3 text-sm text-gray-700">
-            <p className="font-medium">Setup steps (one-time, ~10 min):</p>
+            <p className="font-medium">One-time setup in Render (5 min):</p>
             <ol className="space-y-2 list-decimal list-inside text-sm">
-              <li>Go to <span className="font-mono text-xs bg-gray-100 px-1 rounded">console.cloud.google.com</span> → create a project → enable <strong>Google Drive API</strong></li>
-              <li>IAM & Admin → Service Accounts → Create → download the JSON key</li>
-              <li>In Google Drive, create a folder (e.g. <em>Invoices</em>), open it, copy the ID from the URL</li>
-              <li>Share that folder with the service account email (from the JSON key: <code>client_email</code>)</li>
-              <li>Add these to Render → invoice-backend → Environment:</li>
+              <li>Google Cloud Console → <strong>APIs & Services → Credentials</strong></li>
+              <li>Create Credentials → <strong>OAuth 2.0 Client ID</strong> → Web application</li>
+              <li>Add Authorized redirect URI:<br/>
+                <code className="text-xs bg-gray-100 px-1 rounded">{BASE}/api/settings/drive-callback</code></li>
+              <li>Copy the Client ID and Client Secret</li>
+              <li>Add to Render → invoice-backend → Environment:</li>
             </ol>
             <div className="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded-lg space-y-1">
-              <p>GOOGLE_SERVICE_ACCOUNT_JSON = <span className="text-yellow-400">{'{'}"type":"service_account",...{'}'}</span></p>
-              <p>GOOGLE_DRIVE_FOLDER_ID = <span className="text-yellow-400">1AbCdEfGhIjKlMnOpQrStUvWxYz</span></p>
+              <p>GOOGLE_CLIENT_ID = <span className="text-yellow-400">your-client-id.apps.googleusercontent.com</span></p>
+              <p>GOOGLE_CLIENT_SECRET = <span className="text-yellow-400">GOCSPX-...</span></p>
+              <p>GOOGLE_DRIVE_FOLDER_ID = <span className="text-yellow-400">1nieW8nyAyR0-Dk07jYDBkP_4f6f28X-2</span></p>
             </div>
-            <p className="text-xs text-gray-400">Paste the entire JSON file contents as the value for GOOGLE_SERVICE_ACCOUNT_JSON.</p>
+            <p className="text-xs text-gray-400">After saving in Render, a "Connect Google Drive" button will appear here.</p>
           </div>
         )}
       </Section>
