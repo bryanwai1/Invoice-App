@@ -26,6 +26,12 @@ const migrate = () => {
   if (!settingsCols.includes('google_refresh_token')) {
     db.exec("ALTER TABLE company_settings ADD COLUMN google_refresh_token TEXT");
   }
+  if (!settingsCols.includes('template_style')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN template_style TEXT DEFAULT 'classic'");
+  }
+  if (!settingsCols.includes('logo_position')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN logo_position TEXT DEFAULT 'left'");
+  }
 
   const invoiceCols = db.prepare("PRAGMA table_info(invoices)").all().map(c => c.name);
   if (!invoiceCols.includes('drive_link')) {

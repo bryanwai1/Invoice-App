@@ -13,8 +13,9 @@ const upload = multer({
   dest: LOGO_DIR,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only images allowed'));
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only PNG, JPG, SVG or WebP allowed'));
   }
 });
 
@@ -125,7 +126,8 @@ router.put('/', (req, res) => {
   const {
     name, address, email, phone, website,
     currency_symbol, tax_rate, payment_terms,
-    invoice_prefix, bank_details, primary_color
+    invoice_prefix, bank_details, primary_color,
+    template_style, logo_position
   } = req.body;
 
   db.prepare(`
@@ -133,27 +135,47 @@ router.put('/', (req, res) => {
       name=?, address=?, email=?, phone=?, website=?,
       currency_symbol=?, tax_rate=?, payment_terms=?,
       invoice_prefix=?, bank_details=?, primary_color=?,
+      template_style=?, logo_position=?,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=1
   `).run(
     name, address, email, phone, website,
     currency_symbol, parseFloat(tax_rate) || 0, payment_terms,
     invoice_prefix, bank_details,
-    primary_color || '#1a56db'
+    primary_color || '#1a56db',
+    template_style || 'classic',
+    logo_position || 'left'
   );
 
   res.json({ success: true });
 });
 
 // POST /api/settings/logo
-router.post('/logo', upload.single('logo'), (req, res) => {
+router.post('/logo', upload.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const ext = path.extname(req.file.originalname) || '.png';
-  const newPath = path.join(LOGO_DIR, `logo${ext}`);
-  fs.renameSync(req.file.path, newPath);
-  db.prepare("UPDATE company_settings SET logo_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
-    .run(newPath);
-  res.json({ success: true, logo_path: newPath });
+  try {
+    const isSVG = req.file.mimetype === 'image/svg+xml';
+    const finalPath = path.join(LOGO_DIR, 'logo.png');
+
+    if (isSVG) {
+      // Convert SVG → PNG so PDFKit can render it
+      const sharp = require('sharp');
+      await sharp(req.file.path).png().toFile(finalPath);
+      fs.unlinkSync(req.file.path);
+    } else {
+      // Resize/optimise to max 400px wide, keep PNG
+      const sharp = require('sharp');
+      await sharp(req.file.path).resize({ width: 400, withoutEnlargement: true }).png().toFile(finalPath);
+      fs.unlinkSync(req.file.path);
+    }
+
+    db.prepare("UPDATE company_settings SET logo_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
+      .run(finalPath);
+    res.json({ success: true, logo_path: finalPath });
+  } catch (err) {
+    console.error('[Logo] Upload error:', err.message);
+    res.status(500).json({ error: 'Logo processing failed: ' + err.message });
+  }
 });
 
 module.exports = router;

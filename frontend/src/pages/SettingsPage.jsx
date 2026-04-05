@@ -5,11 +5,82 @@ import { Save, Upload, Palette, CheckCircle, XCircle, ExternalLink, Unlink } fro
 
 const BASE = import.meta.env.VITE_API_URL || '';
 
+const TEMPLATE_OPTIONS = [
+  {
+    id: 'classic',
+    label: 'Classic',
+    desc: 'Colored header band with logo, clean rows',
+    preview: (color) => (
+      <svg viewBox="0 0 120 80" className="w-full h-full">
+        <rect width="120" height="80" fill="#f9fafb" rx="2" />
+        <rect width="120" height="22" fill={color} rx="2" />
+        <rect x="8" y="6" width="30" height="10" fill="rgba(255,255,255,0.3)" rx="1" />
+        <rect x="70" y="6" width="42" height="5" fill="rgba(255,255,255,0.5)" rx="1" />
+        <rect x="70" y="14" width="30" height="3" fill="rgba(255,255,255,0.3)" rx="1" />
+        <rect x="8" y="28" width="50" height="3" fill="#d1d5db" rx="1" />
+        <rect x="8" y="34" width="35" height="2" fill="#e5e7eb" rx="1" />
+        <rect x="8" y="44" width="104" height="6" fill={color} rx="1" />
+        <rect x="8" y="53" width="104" height="3" fill="#f3f4f6" rx="1" />
+        <rect x="8" y="58" width="104" height="3" fill="#f3f4f6" rx="1" />
+        <rect x="70" y="67" width="42" height="8" fill={color} rx="1" />
+      </svg>
+    ),
+  },
+  {
+    id: 'minimal',
+    label: 'Minimal',
+    desc: 'White background, thin accent line, two-column',
+    preview: (color) => (
+      <svg viewBox="0 0 120 80" className="w-full h-full">
+        <rect width="120" height="80" fill="#fff" rx="2" />
+        <rect width="120" height="3" fill={color} rx="1" />
+        <rect x="8" y="9" width="30" height="8" fill="#e5e7eb" rx="1" />
+        <rect x="70" y="9" width="42" height="5" fill="#e5e7eb" rx="1" />
+        <rect x="70" y="16" width="25" height="3" fill="#f3f4f6" rx="1" />
+        <rect x="8" y="22" width="40" height="2" fill={color} rx="1" />
+        <rect x="8" y="27" width="55" height="2" fill="#e5e7eb" rx="1" />
+        <rect x="8" y="32" width="35" height="2" fill="#f3f4f6" rx="1" />
+        <rect x="8" y="40" width="104" height="5" fill="#f3f4f6" rx="1" />
+        <rect x="8" y="48" width="104" height="2" fill="#f3f4f6" rx="1" />
+        <rect x="8" y="53" width="104" height="2" fill="#f3f4f6" rx="1" />
+        <rect x="70" y="60" width="42" height="6" fill={color} rx="1" />
+        <rect x="8" y="72" width="104" height="1" fill={color} rx="1" />
+      </svg>
+    ),
+  },
+  {
+    id: 'modern',
+    label: 'Modern',
+    desc: 'Colored sidebar with company info on left',
+    preview: (color) => (
+      <svg viewBox="0 0 120 80" className="w-full h-full">
+        <rect width="120" height="80" fill="#f9fafb" rx="2" />
+        <rect width="35" height="80" fill={color} rx="2" />
+        <rect x="5" y="8" width="25" height="10" fill="rgba(255,255,255,0.3)" rx="1" />
+        <rect x="5" y="22" width="25" height="2" fill="rgba(255,255,255,0.4)" rx="1" />
+        <rect x="5" y="27" width="20" height="2" fill="rgba(255,255,255,0.3)" rx="1" />
+        <rect x="5" y="32" width="22" height="2" fill="rgba(255,255,255,0.3)" rx="1" />
+        <rect x="5" y="45" width="25" height="2" fill="rgba(255,255,255,0.4)" rx="1" />
+        <rect x="5" y="50" width="18" height="2" fill="rgba(255,255,255,0.3)" rx="1" />
+        <rect x="5" y="55" width="20" height="2" fill="rgba(255,255,255,0.3)" rx="1" />
+        <rect x="42" y="8" width="70" height="6" fill="#d1d5db" rx="1" />
+        <rect x="42" y="17" width="70" height="4" fill="#e5e7eb" rx="1" />
+        <rect x="42" y="24" width="70" height="4" fill="#e5e7eb" rx="1" />
+        <rect x="42" y="33" width="70" height="5" fill="#d1d5db" rx="1" />
+        <rect x="42" y="41" width="70" height="3" fill="#f3f4f6" rx="1" />
+        <rect x="42" y="47" width="70" height="3" fill="#f3f4f6" rx="1" />
+        <rect x="72" y="58" width="40" height="8" fill={color} rx="1" />
+      </svg>
+    ),
+  },
+];
+
 export default function SettingsPage() {
   const [form, setForm] = useState({
     name: '', address: '', email: '', phone: '', website: '',
     currency_symbol: '$', tax_rate: 0, payment_terms: 'Net 30',
-    invoice_prefix: 'INV', bank_details: '', primary_color: '#1a56db'
+    invoice_prefix: 'INV', bank_details: '', primary_color: '#1a56db',
+    template_style: 'classic', logo_position: 'left',
   });
   const [logoUrl, setLogoUrl] = useState(null);
   const [driveConnected, setDriveConnected] = useState(false);
@@ -33,6 +104,8 @@ export default function SettingsPage() {
         invoice_prefix: d.invoice_prefix || 'INV',
         bank_details: d.bank_details || '',
         primary_color: d.primary_color || '#1a56db',
+        template_style: d.template_style || 'classic',
+        logo_position: d.logo_position || 'left',
       });
       if (d.logo_url) setLogoUrl(`${BASE}${d.logo_url}?t=${Date.now()}`);
       setDriveConnected(!!d.drive_connected);
@@ -140,10 +213,52 @@ export default function SettingsPage() {
               <label className="btn-secondary cursor-pointer inline-flex">
                 <Upload size={15} />
                 {uploading ? 'Uploading...' : 'Upload Logo'}
-                <input type="file" accept="image/*" className="hidden" onChange={handleLogo} />
+                <input type="file" accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp" className="hidden" onChange={handleLogo} />
               </label>
-              <p className="text-xs text-gray-400 mt-1">PNG or JPG, max 5MB. Shows in PDF header.</p>
+              <p className="text-xs text-gray-400 mt-1">PNG, JPG, SVG or WebP — max 5 MB. Shows in PDF header.</p>
             </div>
+          </div>
+        </div>
+
+        {/* Logo position */}
+        <div className="mb-5">
+          <label className="label">Logo Position on Invoice</label>
+          <div className="flex gap-3">
+            {['left', 'center', 'right'].map(pos => (
+              <button key={pos} type="button"
+                onClick={() => setField('logo_position', pos)}
+                className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium capitalize transition-all ${
+                  form.logo_position === pos
+                    ? 'border-transparent text-white'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                }`}
+                style={form.logo_position === pos ? { background: form.primary_color } : {}}>
+                {pos}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Invoice template */}
+        <div className="mb-5">
+          <label className="label">Invoice Template</label>
+          <div className="grid grid-cols-3 gap-3">
+            {TEMPLATE_OPTIONS.map(tpl => (
+              <button key={tpl.id} type="button"
+                onClick={() => setField('template_style', tpl.id)}
+                className={`rounded-xl border-2 p-2 text-left transition-all ${
+                  form.template_style === tpl.id
+                    ? 'border-transparent shadow-md'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                style={form.template_style === tpl.id ? { borderColor: form.primary_color } : {}}>
+                <div className="h-20 mb-2 rounded overflow-hidden">
+                  {tpl.preview(form.primary_color)}
+                </div>
+                <p className="text-xs font-semibold text-gray-900">{tpl.label}</p>
+                <p className="text-xs text-gray-400 leading-tight mt-0.5">{tpl.desc}</p>
+              </button>
+            ))}
           </div>
         </div>
 
