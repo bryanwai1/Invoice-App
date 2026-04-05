@@ -18,11 +18,16 @@ export default function WhatsAppPage({ socket }) {
 
   useEffect(() => {
     checkStatus();
+    // Poll every 15 s as fallback (Socket.IO may not connect cross-origin)
+    const poll = setInterval(checkStatus, 15000);
     if (socket) {
       socket.on('wa:status', setStatus);
       socket.on('wa:qr', (d) => { setQr(d.qr); setStatus({ status: 'qr_pending' }); });
-      return () => { socket.off('wa:status'); socket.off('wa:qr'); };
     }
+    return () => {
+      clearInterval(poll);
+      if (socket) { socket.off('wa:status'); socket.off('wa:qr'); }
+    };
   }, [socket]);
 
   const handleConnect = async () => {

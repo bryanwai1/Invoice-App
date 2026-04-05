@@ -170,7 +170,8 @@ async function handleWebhook(body) {
     // ── Parse invoice — try structured format first, then AI
     let parsed = parseInvoiceMessage(text, senderPhone);
 
-    if (!parsed && process.env.ANTHROPIC_API_KEY) {
+    const hasAI = !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+    if (!parsed && hasAI) {
       console.log('[WhatsApp] Falling back to AI parser...');
       parsed = await extractInvoiceFromText(text, senderPhone);
     }

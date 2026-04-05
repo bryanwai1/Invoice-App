@@ -6,6 +6,7 @@ import {
   LayoutDashboard, FileText, PlusCircle, Settings,
   MessageCircle, Wifi, WifiOff, Menu, X
 } from 'lucide-react';
+import { whatsappApi } from './api';
 
 import Dashboard from './pages/Dashboard';
 import InvoiceList from './pages/InvoiceList';
@@ -22,9 +23,19 @@ export default function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Fetch status immediately on load
+    whatsappApi.status().then(r => setWaStatus(r.data)).catch(() => {});
+    // Poll every 30 s so sidebar dot stays accurate without Socket.IO
+    const poll = setInterval(() => {
+      whatsappApi.status().then(r => setWaStatus(r.data)).catch(() => {});
+    }, 30000);
     socket.on('wa:status', setWaStatus);
     socket.on('wa:qr', (data) => setWaStatus(data));
-    return () => { socket.off('wa:status'); socket.off('wa:qr'); };
+    return () => {
+      clearInterval(poll);
+      socket.off('wa:status');
+      socket.off('wa:qr');
+    };
   }, []);
 
   const statusDot = () => {
