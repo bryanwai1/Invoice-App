@@ -62,23 +62,30 @@ router.put('/', (req, res) => {
   res.json({ success: true });
 });
 
-// GET /api/settings/drive-test — diagnose Drive connection
+// GET /api/settings/drive-test — diagnose Drive connection + do a real upload test
 router.get('/drive-test', async (req, res) => {
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON not set' });
   if (!process.env.GOOGLE_DRIVE_FOLDER_ID) return res.json({ ok: false, error: 'GOOGLE_DRIVE_FOLDER_ID not set' });
-  try {
-    JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  } catch {
-    return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON' });
-  }
+  try { JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON); }
+  catch { return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON' }); }
   try {
     const { google } = require('googleapis');
+    const { Readable } = require('stream');
     const key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     const auth = new google.auth.GoogleAuth({ credentials: key, scopes: ['https://www.googleapis.com/auth/drive.file'] });
     const drive = google.drive({ version: 'v3', auth });
-    // Try listing files in the folder to verify access
-    const result = await drive.files.list({ q: `'${process.env.GOOGLE_DRIVE_FOLDER_ID}' in parents`, pageSize: 1 });
-    return res.json({ ok: true, folder_id: process.env.GOOGLE_DRIVE_FOLDER_ID, files_found: result.data.files.length });
+
+    // Try an actual file upload
+    const testContent = `Invoice App drive test - ${new Date().toISOString()}`;
+    const stream = Readable.from([testContent]);
+    const file = await drive.files.create({
+      requestBody: { name: '_drive_test.txt', parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] },
+      media: { mimeType: 'text/plain', body: stream },
+      fields: 'id, webViewLink',
+    });
+    // Clean up test file
+    await drive.files.delete({ fileId: file.data.id }).catch(() => {});
+    return res.json({ ok: true, upload_works: true, folder_id: process.env.GOOGLE_DRIVE_FOLDER_ID });
   } catch (err) {
     return res.json({ ok: false, error: err.message });
   }
