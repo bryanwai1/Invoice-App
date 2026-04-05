@@ -115,29 +115,42 @@ function renderClassic(doc, invoice, items, company) {
   const margin = 50;
   const position = company.logo_position || 'left';
 
+  // Per-invoice layout positions saved from the drag editor, with sensible defaults
+  const layout = company.header_layout
+    ? (typeof company.header_layout === 'string' ? JSON.parse(company.header_layout) : company.header_layout)
+    : {};
+  const companyX = layout.company_x ?? margin;
+  const companyY = layout.company_y ?? 22;
+  const titleX   = layout.title_x   ?? 350;
+  const titleY   = layout.title_y   ?? 28;
+
   // Header band
   doc.rect(0, 0, pageW, 130).fill(primary);
 
-  // Logo or company name
+  // Company name / logo — constrained width so it never overlaps the title block
   const hasLogo = company.logo_path && fs.existsSync(company.logo_path);
+  const leftColW = Math.max(100, titleX - companyX - 10);
   if (hasLogo) {
-    const lx = logoX(position, 130, pageW / 2, margin);
-    drawLogo(doc, company, lx, 28, 65);
-    doc.fontSize(9).fillColor('rgba(255,255,255,0.9)').font('Helvetica-Bold').text(company.name, margin, 100);
+    const lx = logoX(position, 130, pageW / 2, companyX);
+    drawLogo(doc, company, lx, companyY + 6, 55);
+    doc.fontSize(9).fillColor('rgba(255,255,255,0.9)').font('Helvetica-Bold')
+      .text(company.name, companyX, companyY + 66, { width: leftColW });
   } else {
-    doc.fontSize(24).fillColor('#fff').font('Helvetica-Bold').text(company.name, margin, 30);
+    doc.fontSize(22).fillColor('#fff').font('Helvetica-Bold')
+      .text(company.name, companyX, companyY, { width: leftColW });
   }
   doc.fontSize(9).fillColor('rgba(255,255,255,0.8)').font('Helvetica');
-  let infoY = hasLogo ? 112 : 62;
-  if (company.address) { doc.text(company.address, margin, infoY); infoY += 11; }
-  if (company.email)   { doc.text(company.email,   margin, infoY); infoY += 11; }
-  if (company.phone)   { doc.text(company.phone,   margin, infoY); }
+  let infoY = hasLogo ? companyY + 78 : companyY + 34;
+  if (company.address) { doc.text(company.address, companyX, infoY, { width: leftColW }); infoY += 11; }
+  if (company.email)   { doc.text(company.email,   companyX, infoY, { width: leftColW }); infoY += 11; }
+  if (company.phone)   { doc.text(company.phone,   companyX, infoY, { width: leftColW }); }
 
-  // Invoice label (top-right)
+  // Invoice label — right column, position from drag editor
+  const rightColW = pageW - titleX - margin;
   doc.fontSize(28).fillColor('#fff').font('Helvetica-Bold')
-    .text('INVOICE', 350, 30, { align: 'right', width: 195 });
+    .text('INVOICE', titleX, titleY, { align: 'right', width: rightColW });
   doc.fontSize(10).fillColor('rgba(255,255,255,0.9)').font('Helvetica')
-    .text(`#${invoice.invoice_number}`, 350, 66, { align: 'right', width: 195 });
+    .text(`#${invoice.invoice_number}`, titleX, titleY + 36, { align: 'right', width: rightColW });
 
   // Status badge
   doc.roundedRect(margin, 142, 70, 20, 10).fill(statusColor(invoice.status));

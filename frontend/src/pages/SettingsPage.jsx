@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { settingsApi } from '../api';
 import toast from 'react-hot-toast';
 import { Save, Upload, Palette, CheckCircle, XCircle, ExternalLink, Unlink } from 'lucide-react';
+import InvoiceLayoutEditor from '../components/InvoiceLayoutEditor';
 
 const BASE = import.meta.env.VITE_API_URL || '';
 
@@ -89,7 +90,7 @@ export default function SettingsPage() {
     name: '', address: '', email: '', phone: '', website: '',
     currency_symbol: '$', tax_rate: 0, payment_terms: 'Net 30',
     invoice_prefix: 'INV', bank_details: '', primary_color: '#1a56db',
-    template_style: 'classic', logo_position: 'left',
+    template_style: 'classic', logo_position: 'left', header_layout: null,
   });
   const [logoUrl, setLogoUrl] = useState(null);
   const [driveConnected, setDriveConnected] = useState(false);
@@ -115,6 +116,7 @@ export default function SettingsPage() {
         primary_color: d.primary_color || '#1a56db',
         template_style: d.template_style || 'classic',
         logo_position: d.logo_position || 'left',
+        header_layout: d.header_layout || null,
       });
       if (d.logo_url) setLogoUrl(`${BASE}${d.logo_url}?t=${Date.now()}`);
       setDriveConnected(!!d.drive_connected);
@@ -263,6 +265,18 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
+
+        {/* Header layout drag editor — Classic template only */}
+        {form.template_style === 'classic' && (
+          <div className="mb-5">
+            <label className="label">Header Layout (Classic template)</label>
+            <InvoiceLayoutEditor
+              company={form}
+              layout={form.header_layout}
+              onChange={(newLayout) => setField('header_layout', newLayout)}
+            />
+          </div>
+        )}
 
         {/* Brand color */}
         <div>

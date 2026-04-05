@@ -32,6 +32,9 @@ const migrate = () => {
   if (!settingsCols.includes('logo_position')) {
     db.exec("ALTER TABLE company_settings ADD COLUMN logo_position TEXT DEFAULT 'left'");
   }
+  if (!settingsCols.includes('header_layout')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN header_layout TEXT");
+  }
 
   const invoiceCols = db.prepare("PRAGMA table_info(invoices)").all().map(c => c.name);
   if (!invoiceCols.includes('drive_link')) {

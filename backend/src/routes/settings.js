@@ -27,6 +27,7 @@ router.get('/', (req, res) => {
     drive_oauth_configured: isDriveOAuthConfigured(),
     drive_connected: !!(settings?.google_refresh_token),
     logo_url: (settings?.logo_path && fs.existsSync(settings.logo_path)) ? '/api/settings/logo' : null,
+    header_layout: settings?.header_layout ? JSON.parse(settings.header_layout) : null,
   });
 });
 
@@ -127,7 +128,7 @@ router.put('/', (req, res) => {
     name, address, email, phone, website,
     currency_symbol, tax_rate, payment_terms,
     invoice_prefix, bank_details, primary_color,
-    template_style, logo_position
+    template_style, logo_position, header_layout
   } = req.body;
 
   db.prepare(`
@@ -135,7 +136,7 @@ router.put('/', (req, res) => {
       name=?, address=?, email=?, phone=?, website=?,
       currency_symbol=?, tax_rate=?, payment_terms=?,
       invoice_prefix=?, bank_details=?, primary_color=?,
-      template_style=?, logo_position=?,
+      template_style=?, logo_position=?, header_layout=?,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=1
   `).run(
@@ -144,7 +145,8 @@ router.put('/', (req, res) => {
     invoice_prefix, bank_details,
     primary_color || '#1a56db',
     template_style || 'classic',
-    logo_position || 'left'
+    logo_position || 'left',
+    header_layout ? JSON.stringify(header_layout) : null
   );
 
   res.json({ success: true });

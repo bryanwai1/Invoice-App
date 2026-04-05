@@ -128,18 +128,18 @@ export default function InvoiceDetail() {
 
           {/* Header */}
           <div className="card overflow-hidden">
-            <div className="p-6 text-white flex justify-between" style={{ background: brandColor }}>
-              <div>
+            <div className="p-6 text-white flex items-start gap-4" style={{ background: brandColor }}>
+              <div className="min-w-0 flex-1">
                 {logoUrl
                   ? <img src={logoUrl} alt="Logo" className="h-10 object-contain mb-1" />
-                  : <p className="text-lg font-bold">{company.name || 'My Company'}</p>
+                  : <p className="text-lg font-bold leading-tight break-words">{company.name || 'My Company'}</p>
                 }
                 {logoUrl && <p className="text-xs font-semibold opacity-90">{company.name}</p>}
                 {company.address && <p className="text-xs opacity-75 mt-0.5">{company.address}</p>}
                 {company.email && <p className="text-xs opacity-75">{company.email}</p>}
                 {company.phone && <p className="text-xs opacity-75">{company.phone}</p>}
               </div>
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <p className="text-2xl font-bold">INVOICE</p>
                 <p className="text-sm opacity-90">#{data.invoice_number}</p>
                 {data.po_number && <p className="text-xs opacity-75 mt-1">PO: {data.po_number}</p>}
