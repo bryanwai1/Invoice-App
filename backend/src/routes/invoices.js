@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../database');
 const { generatePDF, PDF_DIR } = require('../invoiceGenerator');
 const { sendInvoicePDF } = require('../whatsapp');
+const { uploadInvoiceToDrive } = require('../googleDrive');
 const path = require('path');
 const fs = require('fs');
 
@@ -81,12 +82,16 @@ async function createInvoice(data) {
     company || {}
   );
 
-  db.prepare('UPDATE invoices SET pdf_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-    .run(pdfPath, id);
+  // Upload to Google Drive (non-blocking — fails silently if not configured)
+  const driveLink = await uploadInvoiceToDrive(invoice_number, pdfPath).catch(() => null);
+
+  db.prepare('UPDATE invoices SET pdf_path=?, drive_link=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+    .run(pdfPath, driveLink || null, id);
 
   return {
     ...invoice,
     pdf_path: pdfPath,
+    drive_link: driveLink,
     currency_symbol: company?.currency_symbol || '$'
   };
 }
@@ -281,9 +286,10 @@ router.post('/:id/regenerate-pdf', async (req, res) => {
       items,
       company || {}
     );
-    db.prepare('UPDATE invoices SET pdf_path=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
-      .run(pdfPath, invoice.id);
-    res.json({ success: true, pdf_path: pdfPath });
+    const driveLink = await uploadInvoiceToDrive(invoice.invoice_number, pdfPath).catch(() => null);
+    db.prepare('UPDATE invoices SET pdf_path=?, drive_link=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+      .run(pdfPath, driveLink || null, invoice.id);
+    res.json({ success: true, pdf_path: pdfPath, drive_link: driveLink });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

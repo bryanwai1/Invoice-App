@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { isDriveConfigured } = require('../googleDrive');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -20,7 +21,20 @@ const upload = multer({
 // GET /api/settings
 router.get('/', (req, res) => {
   const settings = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
-  res.json(settings || {});
+  res.json({
+    ...(settings || {}),
+    drive_configured: isDriveConfigured(),
+    logo_url: (settings?.logo_path && fs.existsSync(settings.logo_path)) ? '/api/settings/logo' : null,
+  });
+});
+
+// GET /api/settings/logo — serve the company logo file
+router.get('/logo', (req, res) => {
+  const settings = db.prepare('SELECT logo_path FROM company_settings WHERE id=1').get();
+  if (!settings?.logo_path || !fs.existsSync(settings.logo_path)) {
+    return res.status(404).json({ error: 'No logo uploaded' });
+  }
+  res.sendFile(settings.logo_path);
 });
 
 // PUT /api/settings
@@ -28,19 +42,21 @@ router.put('/', (req, res) => {
   const {
     name, address, email, phone, website,
     currency_symbol, tax_rate, payment_terms,
-    invoice_prefix, bank_details
+    invoice_prefix, bank_details, primary_color
   } = req.body;
 
   db.prepare(`
     UPDATE company_settings SET
       name=?, address=?, email=?, phone=?, website=?,
       currency_symbol=?, tax_rate=?, payment_terms=?,
-      invoice_prefix=?, bank_details=?, updated_at=CURRENT_TIMESTAMP
+      invoice_prefix=?, bank_details=?, primary_color=?,
+      updated_at=CURRENT_TIMESTAMP
     WHERE id=1
   `).run(
     name, address, email, phone, website,
     currency_symbol, parseFloat(tax_rate) || 0, payment_terms,
-    invoice_prefix, bank_details
+    invoice_prefix, bank_details,
+    primary_color || '#1a56db'
   );
 
   res.json({ success: true });

@@ -5,8 +5,10 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import {
   ArrowLeft, Download, Edit, Trash2, Send,
-  MessageCircle, RefreshCw, CheckCircle
+  MessageCircle, RefreshCw, CheckCircle, ExternalLink
 } from 'lucide-react';
+
+const BASE = import.meta.env.VITE_API_URL || '';
 import StatusBadge from '../components/StatusBadge';
 
 const STATUSES = ['draft', 'pending', 'paid', 'overdue', 'cancelled'];
@@ -77,6 +79,8 @@ export default function InvoiceDetail() {
 
   const { items = [], company = {} } = data;
   const sym = company.currency_symbol || '$';
+  const brandColor = company.primary_color || '#1a56db';
+  const logoUrl = company.logo_path ? `${BASE}/api/settings/logo` : null;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -104,6 +108,11 @@ export default function InvoiceDetail() {
           <a href={invoiceApi.downloadUrl(id)} className="btn-secondary" target="_blank" rel="noreferrer">
             <Download size={15} /> Download
           </a>
+          {data.drive_link && (
+            <a href={data.drive_link} className="btn-secondary" target="_blank" rel="noreferrer">
+              <ExternalLink size={15} /> Drive
+            </a>
+          )}
           <Link to={`/invoices/${id}/edit`} className="btn-secondary">
             <Edit size={15} /> Edit
           </Link>
@@ -119,12 +128,16 @@ export default function InvoiceDetail() {
 
           {/* Header */}
           <div className="card overflow-hidden">
-            <div className="bg-primary-600 p-6 text-white flex justify-between">
+            <div className="p-6 text-white flex justify-between" style={{ background: brandColor }}>
               <div>
-                <p className="text-lg font-bold">{company.name || 'My Company'}</p>
-                {company.address && <p className="text-xs opacity-80 mt-1">{company.address}</p>}
-                {company.email && <p className="text-xs opacity-80">{company.email}</p>}
-                {company.phone && <p className="text-xs opacity-80">{company.phone}</p>}
+                {logoUrl
+                  ? <img src={logoUrl} alt="Logo" className="h-10 object-contain mb-1" />
+                  : <p className="text-lg font-bold">{company.name || 'My Company'}</p>
+                }
+                {logoUrl && <p className="text-xs font-semibold opacity-90">{company.name}</p>}
+                {company.address && <p className="text-xs opacity-75 mt-0.5">{company.address}</p>}
+                {company.email && <p className="text-xs opacity-75">{company.email}</p>}
+                {company.phone && <p className="text-xs opacity-75">{company.phone}</p>}
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold">INVOICE</p>
@@ -163,7 +176,7 @@ export default function InvoiceDetail() {
             <div className="px-6 pb-4">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-primary-600 text-white">
+                  <tr className="text-white" style={{ background: brandColor }}>
                     <th className="text-left px-3 py-2 rounded-tl-lg">Description</th>
                     <th className="text-center px-3 py-2">Qty</th>
                     <th className="text-right px-3 py-2">Unit Price</th>
@@ -198,7 +211,7 @@ export default function InvoiceDetail() {
                       <span>Tax ({data.tax_rate}%)</span><span>{sym}{Number(data.tax_amount).toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-bold text-base text-white bg-primary-600 px-3 py-1.5 rounded-lg">
+                  <div className="flex justify-between font-bold text-base text-white px-3 py-1.5 rounded-lg" style={{ background: brandColor }}>
                     <span>Total</span><span>{sym}{Number(data.total).toFixed(2)}</span>
                   </div>
                 </div>

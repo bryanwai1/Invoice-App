@@ -15,8 +15,9 @@ function generatePDF(invoice, items, company) {
 
     doc.pipe(stream);
 
+    const primary = company.primary_color || '#1a56db';
     const colors = {
-      primary: '#1a56db',
+      primary,
       secondary: '#374151',
       light: '#f9fafb',
       border: '#e5e7eb',
@@ -30,15 +31,31 @@ function generatePDF(invoice, items, company) {
     // ── Header Background
     doc.rect(0, 0, doc.page.width, 130).fill(colors.primary);
 
-    // Company Name
-    doc.fontSize(26).fillColor('#ffffff').font('Helvetica-Bold')
-      .text(company.name, 50, 35);
+    // Logo (top-left) — if present
+    const hasLogo = company.logo_path && fs.existsSync(company.logo_path);
+    if (hasLogo) {
+      try {
+        doc.image(company.logo_path, 50, 28, { fit: [130, 70] });
+      } catch (_) {} // skip on corrupt image
+    }
+
+    // Company Name (skip if logo is shown — logo carries the brand)
+    const textStartY = hasLogo ? 100 : 35;
+    if (!hasLogo) {
+      doc.fontSize(26).fillColor('#ffffff').font('Helvetica-Bold')
+        .text(company.name, 50, 35);
+    } else {
+      // Show company name small below logo
+      doc.fontSize(9).fillColor('rgba(255,255,255,0.9)').font('Helvetica-Bold')
+        .text(company.name, 50, 102);
+    }
 
     doc.fontSize(9).fillColor('rgba(255,255,255,0.85)').font('Helvetica');
-    if (company.address) doc.text(company.address, 50, 68);
-    if (company.email)   doc.text(company.email, 50, 80);
-    if (company.phone)   doc.text(company.phone, 50, 92);
-    if (company.website) doc.text(company.website, 50, 104);
+    let infoY = hasLogo ? 113 : 68;
+    if (company.address) { doc.text(company.address, 50, infoY); infoY += 12; }
+    if (company.email)   { doc.text(company.email,   50, infoY); infoY += 12; }
+    if (company.phone)   { doc.text(company.phone,   50, infoY); infoY += 12; }
+    if (company.website) { doc.text(company.website, 50, infoY); }
 
     // INVOICE label
     doc.fontSize(30).fillColor('#ffffff').font('Helvetica-Bold')

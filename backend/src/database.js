@@ -16,9 +16,17 @@ db.pragma('journal_mode = WAL');
 
 // Migrations — safely add columns if they don't exist
 const migrate = () => {
-  const cols = db.prepare("PRAGMA table_info(company_settings)").all().map(c => c.name);
-  if (!cols.includes('group_chat_id')) {
+  const settingsCols = db.prepare("PRAGMA table_info(company_settings)").all().map(c => c.name);
+  if (!settingsCols.includes('group_chat_id')) {
     db.exec("ALTER TABLE company_settings ADD COLUMN group_chat_id TEXT");
+  }
+  if (!settingsCols.includes('primary_color')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN primary_color TEXT DEFAULT '#1a56db'");
+  }
+
+  const invoiceCols = db.prepare("PRAGMA table_info(invoices)").all().map(c => c.name);
+  if (!invoiceCols.includes('drive_link')) {
+    db.exec("ALTER TABLE invoices ADD COLUMN drive_link TEXT");
   }
 };
 
