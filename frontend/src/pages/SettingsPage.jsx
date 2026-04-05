@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { settingsApi } from '../api';
 import toast from 'react-hot-toast';
-import { Save, Upload, Palette, CheckCircle, XCircle, Link, LinkOff } from 'lucide-react';
+import { Save, Upload, Palette, CheckCircle, XCircle, ExternalLink, Unlink } from 'lucide-react';
 
 const BASE = import.meta.env.VITE_API_URL || '';
 
@@ -246,12 +246,12 @@ export default function SettingsPage() {
               finally { setDisconnecting(false); }
             }}
             className="btn-secondary text-red-600 border-red-200 hover:bg-red-50">
-            <LinkOff size={15} /> {disconnecting ? 'Disconnecting...' : 'Disconnect Google Drive'}
+            <Unlink size={15} /> {disconnecting ? 'Disconnecting...' : 'Disconnect Google Drive'}
           </button>
         ) : driveOAuthConfigured ? (
           <a href={`${BASE}/api/settings/drive-auth`}
             className="btn-primary inline-flex items-center gap-2">
-            <Link size={15} /> Connect Google Drive
+            <ExternalLink size={15} /> Connect Google Drive
           </a>
         ) : (
           <div className="space-y-3 text-sm text-gray-700">
