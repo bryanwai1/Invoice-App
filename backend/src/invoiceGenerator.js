@@ -2,7 +2,8 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
-const PDF_DIR = path.join(__dirname, '..', 'pdfs');
+const PERSIST_DIR = process.env.PERSIST_DIR || path.join(__dirname, '..', 'data');
+const PDF_DIR = path.join(PERSIST_DIR, 'pdfs');
 if (!fs.existsSync(PDF_DIR)) {
   fs.mkdirSync(PDF_DIR, { recursive: true });
 }

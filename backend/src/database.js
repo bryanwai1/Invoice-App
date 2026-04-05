@@ -2,7 +2,9 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const DB_DIR = path.join(__dirname, '..', 'data');
+// PERSIST_DIR lets Render's persistent disk be used: set PERSIST_DIR=/data in env
+const PERSIST_DIR = process.env.PERSIST_DIR || path.join(__dirname, '..', 'data');
+const DB_DIR = PERSIST_DIR;
 const DB_PATH = path.join(DB_DIR, 'invoices.db');
 
 if (!fs.existsSync(DB_DIR)) {

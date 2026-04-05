@@ -6,7 +6,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const LOGO_DIR = path.join(__dirname, '..', '..', 'data', 'logos');
+const PERSIST_DIR = process.env.PERSIST_DIR || path.join(__dirname, '..', '..', 'data');
+const LOGO_DIR = path.join(PERSIST_DIR, 'logos');
 if (!fs.existsSync(LOGO_DIR)) fs.mkdirSync(LOGO_DIR, { recursive: true });
 
 const upload = multer({
