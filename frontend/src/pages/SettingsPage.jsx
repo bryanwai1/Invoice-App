@@ -75,6 +75,15 @@ const TEMPLATE_OPTIONS = [
   },
 ];
 
+function Section({ title, children }) {
+  return (
+    <div className="card p-5 mb-5">
+      <h2 className="font-semibold text-gray-900 mb-4">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [form, setForm] = useState({
     name: '', address: '', email: '', phone: '', website: '',
@@ -137,13 +146,6 @@ export default function SettingsPage() {
     } catch { toast.error('Upload failed'); }
     finally { setUploading(false); }
   };
-
-  const Section = ({ title, children }) => (
-    <div className="card p-5 mb-5">
-      <h2 className="font-semibold text-gray-900 mb-4">{title}</h2>
-      {children}
-    </div>
-  );
 
   return (
     <form onSubmit={handleSave} className="p-6 max-w-2xl mx-auto">
