@@ -38,12 +38,20 @@ router.get('/logo', (req, res) => {
   res.sendFile(settings.logo_path);
 });
 
+// Build the exact redirect URI (must match Google Cloud Console exactly)
+function getRedirectUri(req) {
+  // Use BACKEND_URL env var if set, otherwise derive from request (may be http on Render proxy)
+  const base = process.env.BACKEND_URL
+    || `https://${req.get('host')}`;
+  return `${base}/api/settings/drive-callback`;
+}
+
 // GET /api/settings/drive-auth — redirect user to Google consent screen
 router.get('/drive-auth', (req, res) => {
   if (!isDriveOAuthConfigured()) {
     return res.status(500).send('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set in Render environment.');
   }
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/settings/drive-callback`;
+  const redirectUri = getRedirectUri(req);
   const url = getAuthUrl(redirectUri);
   res.redirect(url);
 });
@@ -55,7 +63,7 @@ router.get('/drive-callback', async (req, res) => {
   if (!code) return res.status(400).send('No authorization code received.');
 
   try {
-    const redirectUri = `${req.protocol}://${req.get('host')}/api/settings/drive-callback`;
+    const redirectUri = getRedirectUri(req);
     const tokens = await exchangeCode(code, redirectUri);
 
     if (!tokens.refresh_token) {
