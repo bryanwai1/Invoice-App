@@ -58,6 +58,11 @@ const migrate = () => {
   if (!invoiceCols.includes('drive_link')) {
     db.exec("ALTER TABLE invoices ADD COLUMN drive_link TEXT");
   }
+
+  const itemCols = db.prepare("PRAGMA table_info(invoice_items)").all().map(c => c.name);
+  if (!itemCols.includes('item_discount')) {
+    db.exec("ALTER TABLE invoice_items ADD COLUMN item_discount REAL DEFAULT 0");
+  }
 };
 
 // Create tables

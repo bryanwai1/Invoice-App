@@ -35,29 +35,64 @@ function ItemsTable({ items, sym, brandColor }) {
         </tr>
       </thead>
       <tbody>
-        {items.map((item, i) => (
-          <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-            <td className="px-3 py-2.5 text-gray-900">{item.description}</td>
-            <td className="px-3 py-2.5 text-center text-gray-600">{item.quantity}</td>
-            <td className="px-3 py-2.5 text-right text-gray-600">{sym}{Number(item.unit_price).toFixed(2)}</td>
-            <td className="px-3 py-2.5 text-right font-medium text-gray-900">{sym}{Number(item.amount).toFixed(2)}</td>
-          </tr>
-        ))}
+        {items.map((item, i) => {
+          const hasDisc = Number(item.item_discount) > 0;
+          const gross = Number(item.quantity) * Number(item.unit_price);
+          return (
+            <React.Fragment key={i}>
+              <tr className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="px-3 py-2.5 text-gray-900">{item.description}</td>
+                <td className="px-3 py-2.5 text-center text-gray-600">{item.quantity}</td>
+                <td className="px-3 py-2.5 text-right text-gray-600">{sym}{Number(item.unit_price).toFixed(2)}</td>
+                <td className="px-3 py-2.5 text-right font-medium text-gray-900">
+                  {hasDisc ? (
+                    <span className="flex flex-col items-end gap-0.5">
+                      <span className="line-through text-gray-400 text-xs leading-none">{sym}{gross.toFixed(2)}</span>
+                      <span>{sym}{Number(item.amount).toFixed(2)}</span>
+                    </span>
+                  ) : `${sym}${Number(item.amount).toFixed(2)}`}
+                </td>
+              </tr>
+              {hasDisc && (
+                <tr className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                  <td colSpan={3} className="px-3 pb-2 pt-0 text-xs text-orange-500 italic">
+                    Item discount applied
+                  </td>
+                  <td className="px-3 pb-2 pt-0 text-right text-xs text-orange-500 font-medium">
+                    −{sym}{Number(item.item_discount).toFixed(2)}
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          );
+        })}
       </tbody>
     </table>
   );
 }
 
-function Totals({ invoice, sym, brandColor }) {
+function Totals({ invoice, items, sym, brandColor }) {
+  const itemDiscTotal = (items || []).reduce((s, i) => s + (Number(i.item_discount) || 0), 0);
+  const grossSubtotal = Number(invoice.subtotal) + itemDiscTotal;
   return (
     <div className="flex justify-end mt-4">
-      <div className="w-60 text-sm space-y-1">
+      <div className="w-64 text-sm space-y-1">
+        {itemDiscTotal > 0 && (
+          <>
+            <div className="flex justify-between text-gray-500 px-2">
+              <span>Gross Subtotal</span><span>{sym}{grossSubtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-orange-500 px-2 font-medium">
+              <span>Item Discounts</span><span>−{sym}{itemDiscTotal.toFixed(2)}</span>
+            </div>
+          </>
+        )}
         <div className="flex justify-between text-gray-500 px-2">
           <span>Subtotal</span><span>{sym}{Number(invoice.subtotal).toFixed(2)}</span>
         </div>
         {Number(invoice.discount) > 0 && (
           <div className="flex justify-between text-gray-500 px-2">
-            <span>Discount</span><span>− {sym}{Number(invoice.discount).toFixed(2)}</span>
+            <span>Overall Discount</span><span>−{sym}{Number(invoice.discount).toFixed(2)}</span>
           </div>
         )}
         {Number(invoice.tax_rate) > 0 && (
@@ -165,7 +200,7 @@ function ClassicTemplate({ invoice, items, company, sym, brandColor, logoUrl }) 
       {/* Items */}
       <div className="px-8 pb-4">
         <ItemsTable items={items} sym={sym} brandColor={brandColor} />
-        <Totals invoice={invoice} sym={sym} brandColor={brandColor} />
+        <Totals invoice={invoice} items={items} sym={sym} brandColor={brandColor} />
       </div>
 
       {/* Notes + bank */}
@@ -251,7 +286,7 @@ function MinimalTemplate({ invoice, items, company, sym, brandColor, logoUrl }) 
       {/* Items */}
       <div className="px-8 py-4">
         <ItemsTable items={items} sym={sym} brandColor={brandColor} />
-        <Totals invoice={invoice} sym={sym} brandColor={brandColor} />
+        <Totals invoice={invoice} items={items} sym={sym} brandColor={brandColor} />
       </div>
 
       {/* Notes + bank */}
@@ -357,7 +392,7 @@ function ModernTemplate({ invoice, items, company, sym, brandColor, logoUrl }) {
 
         {/* Items */}
         <ItemsTable items={items} sym={sym} brandColor={brandColor} />
-        <Totals invoice={invoice} sym={sym} brandColor={brandColor} />
+        <Totals invoice={invoice} items={items} sym={sym} brandColor={brandColor} />
 
         {/* Notes */}
         {invoice.notes && (

@@ -37,7 +37,7 @@ function drawTotals(doc, invoice, company, x, y) {
   const primary = company.primary_color || '#1a56db';
   const w = 175;
 
-  const row = (label, value, highlight) => {
+  const row = (label, value, highlight, accent) => {
     if (highlight) {
       doc.rect(x - 10, y - 4, w, 22).fill(primary);
       doc.fontSize(11).fillColor('#fff').font('Helvetica-Bold')
@@ -45,7 +45,8 @@ function drawTotals(doc, invoice, company, x, y) {
         .text(value, x + 80, y, { width: 85, align: 'right' });
       y += 24;
     } else {
-      doc.fontSize(9).fillColor('#6b7280').font('Helvetica')
+      const color = accent || '#6b7280';
+      doc.fontSize(9).fillColor(color).font('Helvetica')
         .text(label, x, y, { width: 80 })
         .text(value, x + 80, y, { width: 85, align: 'right' });
       doc.strokeColor('#e5e7eb').lineWidth(0.5)
@@ -55,6 +56,12 @@ function drawTotals(doc, invoice, company, x, y) {
     return y;
   };
 
+  const itemDiscTotal = Number(invoice.item_discount_total) || 0;
+  if (itemDiscTotal > 0) {
+    const gross = Number(invoice.subtotal) + itemDiscTotal;
+    y = row('Gross Subtotal', `${sym}${gross.toFixed(2)}`);
+    y = row('Item Discounts', `-${sym}${itemDiscTotal.toFixed(2)}`, false, '#d97706');
+  }
   y = row('Subtotal', `${sym}${Number(invoice.subtotal).toFixed(2)}`);
   if (invoice.discount > 0) y = row('Discount', `-${sym}${Number(invoice.discount).toFixed(2)}`);
   if (invoice.tax_rate > 0)  y = row(`Tax (${invoice.tax_rate}%)`, `${sym}${Number(invoice.tax_amount).toFixed(2)}`);
@@ -79,16 +86,42 @@ function drawItemsTable(doc, items, company, startY) {
 
   let rowY = startY + 22;
   items.forEach((item, i) => {
+    const hasDisc = Number(item.item_discount) > 0;
     const bg = i % 2 === 0 ? '#ffffff' : '#f9fafb';
-    doc.rect(margin, rowY, tableW, 24).fill(bg);
+    const rowH = hasDisc ? 36 : 24;
+    doc.rect(margin, rowY, tableW, rowH).fill(bg);
     doc.strokeColor('#e5e7eb').lineWidth(0.5)
-      .moveTo(margin, rowY + 24).lineTo(margin + tableW, rowY + 24).stroke();
+      .moveTo(margin, rowY + rowH).lineTo(margin + tableW, rowY + rowH).stroke();
     doc.fontSize(9).fillColor('#111827').font('Helvetica')
       .text(item.description,                   cols.desc + 6, rowY + 8, { width: 225 })
       .text(String(item.quantity),              cols.qty,      rowY + 8, { width: 60, align: 'center' })
-      .text(`${sym}${Number(item.unit_price).toFixed(2)}`, cols.price, rowY + 8, { width: 80, align: 'right' })
-      .text(`${sym}${Number(item.amount).toFixed(2)}`,     cols.amount,rowY + 8, { width: 95, align: 'right' });
-    rowY += 24;
+      .text(`${sym}${Number(item.unit_price).toFixed(2)}`, cols.price, rowY + 8, { width: 80, align: 'right' });
+
+    if (hasDisc) {
+      // Show gross with manual strikethrough, then net below
+      const gross = Number(item.quantity) * Number(item.unit_price);
+      const grossStr = `${sym}${gross.toFixed(2)}`;
+      const grossX = cols.amount;
+      const grossW = 95;
+      doc.fontSize(8).fillColor('#9ca3af').font('Helvetica')
+        .text(grossStr, grossX, rowY + 6, { width: grossW, align: 'right' });
+      // Manual strikethrough line
+      const textW = doc.widthOfString(grossStr);
+      const lineY = rowY + 10;
+      doc.strokeColor('#9ca3af').lineWidth(0.8)
+        .moveTo(cols.amount + grossW - textW - 2, lineY)
+        .lineTo(cols.amount + grossW - 2, lineY).stroke();
+      // Net amount
+      doc.fontSize(9).fillColor('#111827').font('Helvetica-Bold')
+        .text(`${sym}${Number(item.amount).toFixed(2)}`, cols.amount, rowY + 18, { width: grossW, align: 'right' });
+      // Discount label
+      doc.fontSize(7.5).fillColor('#d97706').font('Helvetica')
+        .text(`disc: -${sym}${Number(item.item_discount).toFixed(2)}`, cols.desc + 6, rowY + 21, { width: 200 });
+    } else {
+      doc.fontSize(9).fillColor('#111827').font('Helvetica')
+        .text(`${sym}${Number(item.amount).toFixed(2)}`, cols.amount, rowY + 8, { width: 95, align: 'right' });
+    }
+    rowY += rowH;
   });
 
   return rowY;
@@ -449,10 +482,14 @@ function generatePDF(invoice, items, company) {
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
+    // Compute total item discounts for the totals section
+    const item_discount_total = (items || []).reduce((s, i) => s + (parseFloat(i.item_discount) || 0), 0);
+    const invoiceWithDisc = { ...invoice, item_discount_total };
+
     const style = company.template_style || 'classic';
-    if      (style === 'minimal') renderMinimal(doc, invoice, items, company);
-    else if (style === 'modern')  renderModern (doc, invoice, items, company);
-    else                          renderClassic(doc, invoice, items, company);
+    if      (style === 'minimal') renderMinimal(doc, invoiceWithDisc, items, company);
+    else if (style === 'modern')  renderModern (doc, invoiceWithDisc, items, company);
+    else                          renderClassic(doc, invoiceWithDisc, items, company);
 
     doc.end();
     stream.on('finish', () => resolve(filePath));

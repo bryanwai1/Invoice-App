@@ -6,6 +6,52 @@ import InvoiceLayoutEditor from '../components/InvoiceLayoutEditor';
 
 const BASE = import.meta.env.VITE_API_URL || '';
 
+// ── Currency list (matches InvoiceForm) ───────────────────────────────────────
+const CURRENCIES = [
+  { code: 'MYR', sym: 'RM',   label: 'MYR — Malaysian Ringgit' },
+  { code: 'USD', sym: '$',    label: 'USD — US Dollar' },
+  { code: 'SGD', sym: 'S$',   label: 'SGD — Singapore Dollar' },
+  { code: 'EUR', sym: '€',    label: 'EUR — Euro' },
+  { code: 'GBP', sym: '£',    label: 'GBP — British Pound' },
+  { code: 'AUD', sym: 'A$',   label: 'AUD — Australian Dollar' },
+  { code: 'JPY', sym: '¥',    label: 'JPY — Japanese Yen' },
+  { code: 'CNY', sym: 'CN¥',  label: 'CNY — Chinese Yuan' },
+  { code: 'THB', sym: '฿',    label: 'THB — Thai Baht' },
+  { code: 'IDR', sym: 'Rp',   label: 'IDR — Indonesian Rupiah' },
+  { code: 'PHP', sym: '₱',    label: 'PHP — Philippine Peso' },
+  { code: 'INR', sym: '₹',    label: 'INR — Indian Rupee' },
+];
+
+// Dropdown + editable symbol input
+function CurrencyPicker({ value, onChange }) {
+  const matched = CURRENCIES.find(c => c.sym === value);
+  return (
+    <div className="space-y-2">
+      <select
+        className="input"
+        value={matched ? matched.code : '__custom__'}
+        onChange={e => {
+          const c = CURRENCIES.find(x => x.code === e.target.value);
+          if (c) onChange(c.sym);
+        }}
+      >
+        {CURRENCIES.map(c => (
+          <option key={c.code} value={c.code}>{c.label}</option>
+        ))}
+        {!matched && <option value="__custom__">Custom / Other</option>}
+      </select>
+      <input
+        className="input font-mono"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="RM / $ / €"
+        maxLength={6}
+      />
+      <p className="text-xs text-gray-400">Edit the symbol above for any currency not in the list.</p>
+    </div>
+  );
+}
+
 const TEMPLATE_OPTIONS = [
   {
     id: 'classic',
@@ -404,9 +450,10 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="label">Currency Symbol</label>
-            <input className="input" value={form.currency_symbol}
-              onChange={e => setField('currency_symbol', e.target.value)}
-              placeholder="$" maxLength={5} />
+            <CurrencyPicker
+              value={form.currency_symbol}
+              onChange={v => setField('currency_symbol', v)}
+            />
           </div>
           <div>
             <label className="label">Default Tax Rate (%)</label>

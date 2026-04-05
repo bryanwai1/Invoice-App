@@ -45,7 +45,8 @@ async function createInvoice(data) {
     description: item.description,
     quantity: parseFloat(item.quantity) || 1,
     unit_price: parseFloat(item.unit_price) || 0,
-    amount: parseFloat(item.amount) || (parseFloat(item.quantity) * parseFloat(item.unit_price))
+    amount: parseFloat(item.amount) || (parseFloat(item.quantity) * parseFloat(item.unit_price)),
+    item_discount: parseFloat(item.item_discount) || 0,
   }));
 
   const { subtotal, tax_amount, total } = calcTotals(validItems, tax_rate, discount);
@@ -67,11 +68,11 @@ async function createInvoice(data) {
 
   // Insert items
   const insertItem = db.prepare(`
-    INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, item_discount)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
   for (const item of validItems) {
-    insertItem.run(id, item.description, item.quantity, item.unit_price, item.amount);
+    insertItem.run(id, item.description, item.quantity, item.unit_price, item.amount, item.item_discount);
   }
 
   // Generate PDF
@@ -168,7 +169,8 @@ router.put('/:id', async (req, res) => {
       description: item.description,
       quantity: parseFloat(item.quantity) || 1,
       unit_price: parseFloat(item.unit_price) || 0,
-      amount: parseFloat(item.amount) || (parseFloat(item.quantity) * parseFloat(item.unit_price))
+      amount: parseFloat(item.amount) || (parseFloat(item.quantity) * parseFloat(item.unit_price)),
+      item_discount: parseFloat(item.item_discount) || 0,
     }));
 
     const { subtotal, tax_amount, total } = calcTotals(validItems, tax_rate, discount);
@@ -190,11 +192,11 @@ router.put('/:id', async (req, res) => {
     // Replace items
     db.prepare('DELETE FROM invoice_items WHERE invoice_id=?').run(id);
     const insertItem = db.prepare(`
-      INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, item_discount)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
     for (const item of validItems) {
-      insertItem.run(id, item.description, item.quantity, item.unit_price, item.amount);
+      insertItem.run(id, item.description, item.quantity, item.unit_price, item.amount, item.item_discount);
     }
 
     // Regenerate PDF
