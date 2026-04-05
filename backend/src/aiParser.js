@@ -7,7 +7,7 @@ async function extractInvoiceFromText(text, senderPhone) {
   const today = format(new Date(), 'yyyy-MM-dd');
   const in30 = format(addDays(new Date(), 30), 'yyyy-MM-dd');
 
-  const prompt = `You are an invoice data extractor. Extract invoice information from the message below and return ONLY a JSON object.
+  const prompt = `You are an invoice data extractor for a Malaysian trainer/facilitator business. Extract invoice information from the message and return ONLY a JSON object.
 
 Today: ${today}  |  Default due date: ${in30}
 
@@ -34,10 +34,24 @@ Return this JSON (null for missing fields):
 }
 
 Rules:
-- is_invoice_request = true only if clearly asking to create an invoice
-- Calculate relative dates ("next month", "in 30 days") from today
+- is_invoice_request = true if the message contains invoice data (a client name + at least one amount or item), even if the user never says "create invoice" — they often just send the data directly
+- "Attn:" or "Attention:" or "PIC:" lines are a contact person at the client — put them in notes as "Attn: [name]"
+- Currency prefix "RM" means Malaysian Ringgit — strip it and use the number (e.g. "RM1,700" → 1700)
+- Numbers with commas are thousands separators, NOT decimals — "1,700" = 1700, "2,750" = 2750
+- A standalone "RM1700" line with no label → use the Description field (if any) as the item description, otherwise "Service Fee"
+- "Description:", "Desc:", "Job:" lines → use as item description or notes
+- A line like "Transport claim, RM500" or "Hotel fees RM350" → one line item
+- "@ 1,700" means unit price is 1700
+- Calculate relative dates ("next month", "end of month", "30 April") from today
 - Default quantity to 1 if not mentioned
-- Return ONLY the JSON, no explanation`;
+- Return ONLY the JSON, no explanation
+
+Examples of real messages you will receive:
+  "Client: InfoTrek\\nAttn: Shin Yee\\nRM1700\\nTransport claim, RM500\\nDescription: Trainer Fee, Taaras Team Building"
+  → client_name: "InfoTrek", items: [{description:"Trainer Fee, Taaras Team Building", unit_price:1700}, {description:"Transport claim", unit_price:500}], notes: "Attn: Shin Yee"
+
+  "INVOICE\\nClient: InfoTrek , Shin Yee\\nItem: Trainer Fee @ 1,700"
+  → client_name: "InfoTrek", items: [{description:"Trainer Fee", unit_price:1700}], notes: "Attn: Shin Yee"`;
 
   try {
     let raw;
@@ -72,7 +86,10 @@ Rules:
     }
 
     const data = JSON.parse(raw);
-    if (!data.is_invoice_request || !data.client_name || !data.items?.length) return null;
+    // Accept if: has a client name + at least one item OR at least one amount-like field
+    const hasClient = !!data.client_name;
+    const hasItems  = Array.isArray(data.items) && data.items.length > 0;
+    if (!hasClient || !hasItems) return null;
     if (senderPhone && !data.client_phone) data.client_phone = senderPhone;
     return data;
 
