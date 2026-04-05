@@ -28,7 +28,9 @@ export const settingsApi = {
     const fd = new FormData();
     fd.append('logo', file);
     return api.post('/settings/logo', fd);
-  }
+  },
+  setBotMode: (bot_mode, clear_group = false) =>
+    api.patch('/settings/bot-mode', { bot_mode, clear_group }),
 };
 
 export const whatsappApi = {

@@ -153,6 +153,23 @@ router.put('/', (req, res) => {
   res.json({ success: true });
 });
 
+// PATCH /api/settings/bot-mode — update bot mode and optionally clear group lock
+router.patch('/bot-mode', (req, res) => {
+  const { bot_mode, clear_group } = req.body;
+  const valid = ['all', 'group_only', 'dm_only'];
+  if (bot_mode && !valid.includes(bot_mode)) {
+    return res.status(400).json({ error: 'Invalid bot_mode. Use: all | group_only | dm_only' });
+  }
+  if (clear_group) {
+    db.prepare("UPDATE company_settings SET group_chat_id=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=1").run();
+  }
+  if (bot_mode) {
+    db.prepare("UPDATE company_settings SET bot_mode=?, updated_at=CURRENT_TIMESTAMP WHERE id=1").run(bot_mode);
+  }
+  const updated = db.prepare('SELECT bot_mode, group_chat_id FROM company_settings WHERE id=1').get();
+  res.json({ success: true, ...updated });
+});
+
 // POST /api/settings/logo
 router.post('/logo', upload.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });

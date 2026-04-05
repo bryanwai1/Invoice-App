@@ -214,18 +214,33 @@ async function handleWebhook(body) {
     const senderPhone = sender?.replace('@c.us', '');
     const isGroup = chatId?.endsWith('@g.us');
 
-    // Get configured group ID from DB settings (optional filter)
     const settings = db.prepare('SELECT * FROM company_settings WHERE id=1').get();
     const configuredGroup = settings?.group_chat_id;
+    const botMode = settings?.bot_mode || 'all'; // 'all' | 'group_only' | 'dm_only'
 
-    // If a group is configured, only process messages from that group
-    if (isGroup && configuredGroup && chatId !== configuredGroup) return;
-
-    // Auto-save group ID on first group message if not configured yet
-    if (isGroup && !configuredGroup) {
-      db.prepare("UPDATE company_settings SET group_chat_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
-        .run(chatId);
-      console.log('[WhatsApp] Group ID auto-saved:', chatId);
+    // ── Mode gating ──────────────────────────────────────────────────────────
+    if (botMode === 'group_only') {
+      // Ignore every DM — only respond inside a group
+      if (!isGroup) return;
+      // If a specific group is locked in, ignore other groups
+      if (configuredGroup && chatId !== configuredGroup) return;
+      // First group message ever — auto-save so we lock onto this group
+      if (!configuredGroup) {
+        db.prepare("UPDATE company_settings SET group_chat_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
+          .run(chatId);
+        console.log('[WhatsApp] Group locked:', chatId);
+      }
+    } else if (botMode === 'dm_only') {
+      // Ignore all group chats — only respond to DMs
+      if (isGroup) return;
+    } else {
+      // 'all' mode — still respect a pinned group if one is set
+      if (isGroup && configuredGroup && chatId !== configuredGroup) return;
+      if (isGroup && !configuredGroup) {
+        db.prepare("UPDATE company_settings SET group_chat_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
+          .run(chatId);
+        console.log('[WhatsApp] Group ID auto-saved:', chatId);
+      }
     }
 
     let text = null;

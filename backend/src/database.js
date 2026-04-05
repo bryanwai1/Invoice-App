@@ -38,6 +38,10 @@ const migrate = () => {
     db.exec("ALTER TABLE company_settings ADD COLUMN header_layout TEXT");
   }
 
+  if (!settingsCols.includes('bot_mode')) {
+    db.exec("ALTER TABLE company_settings ADD COLUMN bot_mode TEXT DEFAULT 'all'");
+  }
+
   const invoiceCols = db.prepare("PRAGMA table_info(invoices)").all().map(c => c.name);
   if (!invoiceCols.includes('drive_link')) {
     db.exec("ALTER TABLE invoices ADD COLUMN drive_link TEXT");

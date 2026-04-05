@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { whatsappApi } from '../api';
+import { whatsappApi, settingsApi } from '../api';
 import toast from 'react-hot-toast';
-import { Wifi, WifiOff, MessageCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { Wifi, WifiOff, MessageCircle, ExternalLink, RefreshCw, Shield, Users, User, Trash2 } from 'lucide-react';
 
 export default function WhatsAppPage({ socket }) {
   const [status, setStatus] = useState({ status: 'checking' });
@@ -10,14 +10,49 @@ export default function WhatsAppPage({ socket }) {
   const [testPhone, setTestPhone] = useState('');
   const [testMsg, setTestMsg] = useState('Hello from Invoice App! 👋');
   const [sending, setSending] = useState(false);
+  const [botMode, setBotMode] = useState('all');
+  const [groupChatId, setGroupChatId] = useState('');
+  const [savingMode, setSavingMode] = useState(false);
 
   const checkStatus = async () => {
     const res = await whatsappApi.status();
     setStatus(res.data);
   };
 
+  const loadBotMode = async () => {
+    try {
+      const res = await settingsApi.get();
+      setBotMode(res.data.bot_mode || 'all');
+      setGroupChatId(res.data.group_chat_id || '');
+    } catch (_) {}
+  };
+
+  const saveBotMode = async (mode) => {
+    setSavingMode(true);
+    try {
+      const res = await settingsApi.setBotMode(mode);
+      setBotMode(res.data.bot_mode);
+      toast.success('Bot mode updated');
+    } catch {
+      toast.error('Failed to update bot mode');
+    } finally { setSavingMode(false); }
+  };
+
+  const clearGroup = async () => {
+    if (!confirm('Clear the locked group? The bot will auto-lock to the next group message it receives.')) return;
+    setSavingMode(true);
+    try {
+      const res = await settingsApi.setBotMode(null, true);
+      setGroupChatId(res.data.group_chat_id || '');
+      toast.success('Group lock cleared');
+    } catch {
+      toast.error('Failed to clear group');
+    } finally { setSavingMode(false); }
+  };
+
   useEffect(() => {
     checkStatus();
+    loadBotMode();
     // Poll every 15 s as fallback (Socket.IO may not connect cross-origin)
     const poll = setInterval(checkStatus, 15000);
     if (socket) {
@@ -109,6 +144,61 @@ export default function WhatsAppPage({ socket }) {
           </div>
         </div>
       )}
+
+      {/* Bot Mode */}
+      <div className="card p-5 mb-5">
+        <h2 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+          <Shield size={16} className="text-primary-600" /> Bot Response Mode
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">Control which chats the bot listens to — prevents it from replying in every private conversation.</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          {[
+            { value: 'group_only', icon: Users, label: 'Group Only', desc: 'Only responds inside one group chat. Ignores all DMs. Recommended.' },
+            { value: 'dm_only',   icon: User,  label: 'DMs Only',   desc: 'Only responds to direct messages. Ignores all groups.' },
+            { value: 'all',       icon: Wifi,  label: 'All Chats',  desc: 'Responds to every chat — groups and DMs. Not recommended.' },
+          ].map(({ value, icon: Icon, label, desc }) => (
+            <button
+              key={value}
+              onClick={() => saveBotMode(value)}
+              disabled={savingMode}
+              className={`text-left p-4 rounded-xl border-2 transition-all ${
+                botMode === value
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Icon size={15} className={botMode === value ? 'text-primary-600' : 'text-gray-400'} />
+                <span className={`font-semibold text-sm ${botMode === value ? 'text-primary-700' : 'text-gray-700'}`}>{label}</span>
+                {botMode === value && <span className="ml-auto text-[10px] font-bold bg-primary-600 text-white px-1.5 py-0.5 rounded-full">ACTIVE</span>}
+              </div>
+              <p className="text-xs text-gray-500 leading-snug">{desc}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Group lock status */}
+        {(botMode === 'group_only' || botMode === 'all') && (
+          <div className={`rounded-lg p-3 flex items-start justify-between gap-3 ${groupChatId ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+            <div>
+              <p className={`text-xs font-semibold ${groupChatId ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {groupChatId ? '🔒 Group Locked' : '⏳ No Group Locked Yet'}
+              </p>
+              {groupChatId
+                ? <p className="text-xs text-emerald-600 font-mono mt-0.5">{groupChatId}</p>
+                : <p className="text-xs text-amber-600 mt-0.5">Send any message from your group chat — the bot will auto-lock to it.</p>
+              }
+            </div>
+            {groupChatId && (
+              <button onClick={clearGroup} disabled={savingMode}
+                className="shrink-0 flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">
+                <Trash2 size={12} /> Clear
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Setup Guide */}
       <div className="card p-5 mb-5">
