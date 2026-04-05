@@ -62,6 +62,28 @@ router.put('/', (req, res) => {
   res.json({ success: true });
 });
 
+// GET /api/settings/drive-test — diagnose Drive connection
+router.get('/drive-test', async (req, res) => {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON not set' });
+  if (!process.env.GOOGLE_DRIVE_FOLDER_ID) return res.json({ ok: false, error: 'GOOGLE_DRIVE_FOLDER_ID not set' });
+  try {
+    JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  } catch {
+    return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON' });
+  }
+  try {
+    const { google } = require('googleapis');
+    const key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    const auth = new google.auth.GoogleAuth({ credentials: key, scopes: ['https://www.googleapis.com/auth/drive.file'] });
+    const drive = google.drive({ version: 'v3', auth });
+    // Try listing files in the folder to verify access
+    const result = await drive.files.list({ q: `'${process.env.GOOGLE_DRIVE_FOLDER_ID}' in parents`, pageSize: 1 });
+    return res.json({ ok: true, folder_id: process.env.GOOGLE_DRIVE_FOLDER_ID, files_found: result.data.files.length });
+  } catch (err) {
+    return res.json({ ok: false, error: err.message });
+  }
+});
+
 // POST /api/settings/logo
 router.post('/logo', upload.single('logo'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
