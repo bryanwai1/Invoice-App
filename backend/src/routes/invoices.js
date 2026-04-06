@@ -132,6 +132,47 @@ router.get('/stats', (req, res) => {
   res.json(stats);
 });
 
+// ── GET /api/invoices/breakdown
+router.get('/breakdown', (req, res) => {
+  const { client } = req.query;
+
+  // All unique clients
+  const clients = db.prepare(
+    'SELECT DISTINCT client_name FROM invoices ORDER BY client_name'
+  ).all().map(r => r.client_name);
+
+  // Per-client totals with status breakdown
+  const byClient = db.prepare(`
+    SELECT client_name,
+      COUNT(*) as invoice_count,
+      COALESCE(SUM(total), 0) as total_invoiced,
+      COALESCE(SUM(CASE WHEN status='paid'    THEN total ELSE 0 END), 0) as total_paid,
+      COALESCE(SUM(CASE WHEN status='pending' THEN total ELSE 0 END), 0) as total_pending,
+      COALESCE(SUM(CASE WHEN status='overdue' THEN total ELSE 0 END), 0) as total_overdue,
+      COALESCE(SUM(CASE WHEN status='draft'   THEN total ELSE 0 END), 0) as total_draft
+    FROM invoices
+    GROUP BY client_name
+    ORDER BY total_invoiced DESC
+  `).all();
+
+  // Per-item-description totals (filterable by client)
+  const catParams = client ? [client] : [];
+  const catWhere  = client ? 'WHERE i.client_name = ?' : '';
+  const byCategory = db.prepare(`
+    SELECT TRIM(ii.description) as category,
+      COALESCE(SUM(ii.amount), 0) as total,
+      SUM(ii.quantity) as qty,
+      COUNT(*) as item_count
+    FROM invoice_items ii
+    JOIN invoices i ON i.id = ii.invoice_id
+    ${catWhere}
+    GROUP BY LOWER(TRIM(ii.description))
+    ORDER BY total DESC
+  `).all(...catParams);
+
+  res.json({ clients, by_client: byClient, by_category: byCategory });
+});
+
 // ── GET /api/invoices/:id
 router.get('/:id', (req, res) => {
   const invoice = db.prepare('SELECT * FROM invoices WHERE id=?').get(req.params.id);

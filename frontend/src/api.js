@@ -19,7 +19,7 @@ export const invoiceApi = {
   sendWhatsApp: (id, phone) => api.post(`/invoices/${id}/send-whatsapp`, { phone }),
   regeneratePdf: (id) => api.post(`/invoices/${id}/regenerate-pdf`),
   stats: () => api.get('/invoices/stats'),
-  breakdown: () => api.get('/invoices/breakdown'),
+  breakdown: (params) => api.get('/invoices/breakdown', { params }),
 };
 
 export const settingsApi = {

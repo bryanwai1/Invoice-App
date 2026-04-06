@@ -1,8 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { settingsApi } from '../api';
 import toast from 'react-hot-toast';
 import { Save, Upload, Palette, CheckCircle, XCircle, ExternalLink, Unlink } from 'lucide-react';
-import InvoiceLayoutEditor from '../components/InvoiceLayoutEditor';
+import InvoicePreview from '../components/InvoicePreview';
+
+// Sample invoice used in the live preview
+const SAMPLE_INVOICE = {
+  invoice_number: 'INV-2025-1000',
+  status: 'pending',
+  client_name: 'Sample Client Sdn Bhd',
+  client_email: 'client@example.com',
+  client_phone: '+60 12-345 6789',
+  client_address: '456 Client Street\nKuala Lumpur',
+  issue_date: '2025-04-06',
+  due_date: '2025-05-06',
+  po_number: 'PO-2025-001',
+  subtotal: 2500, tax_rate: 0, tax_amount: 0, discount: 0, total: 2500,
+  notes: 'Thank you for your business.',
+  payment_terms: 'Net 30',
+};
+const SAMPLE_ITEMS = [
+  { description: 'Web Design & Development', quantity: 1, unit_price: 1500, amount: 1500, item_discount: 0 },
+  { description: 'Monthly Maintenance', quantity: 2, unit_price: 500, amount: 1000, item_discount: 0 },
+];
 
 const BASE = import.meta.env.VITE_API_URL || '';
 
@@ -132,6 +152,9 @@ function Section({ title, children }) {
 }
 
 export default function SettingsPage() {
+  const previewPanelRef = useRef(null);
+  const [previewScale, setPreviewScale] = useState(0.45);
+
   const [form, setForm] = useState({
     name: '', address: '', email: '', phone: '', website: '',
     currency_symbol: '$', tax_rate: 0, payment_terms: 'Net 30',
@@ -176,6 +199,20 @@ export default function SettingsPage() {
     });
   }, []);
 
+  // Responsive scaling for the live A4 preview
+  useEffect(() => {
+    const el = previewPanelRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const usable = entry.contentRect.width - 16;
+        setPreviewScale(Math.min(0.9, Math.max(0.2, usable / 794)));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async (e) => {
@@ -208,20 +245,33 @@ export default function SettingsPage() {
         <p className="text-gray-500 text-sm">Your company details, branding, and integrations.</p>
       </div>
 
-      {/* Brand Preview */}
+      {/* Live A4 Invoice Preview */}
       <div className="card overflow-hidden mb-5">
-        <div className="p-5 flex items-center gap-4 text-white" style={{ background: form.primary_color }}>
-          {logoUrl
-            ? <img src={logoUrl} alt="Logo" className="h-12 object-contain" />
-            : <span className="text-2xl font-bold">{form.name || 'Company Name'}</span>
-          }
-          <div className="ml-auto text-right opacity-90">
-            <p className="text-xl font-bold">INVOICE</p>
-            <p className="text-xs">#INV-2025-1000</p>
-          </div>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900 text-sm">Live Invoice Preview</h2>
+          <span className="text-xs text-gray-400">Updates as you change settings</span>
         </div>
-        <div className="px-5 py-2 bg-gray-50 text-xs text-gray-400 text-center">
-          Invoice header preview — updates as you type
+        <div
+          ref={previewPanelRef}
+          className="bg-gray-100 p-2 overflow-hidden"
+          style={{ minHeight: `${Math.round(794 * 1.414 * previewScale) + 16}px` }}
+        >
+          <div style={{
+            width: 794,
+            transform: `scale(${previewScale})`,
+            transformOrigin: 'top left',
+            pointerEvents: 'none',
+          }}>
+            <InvoicePreview
+              invoice={{ ...SAMPLE_INVOICE, payment_terms: form.payment_terms || 'Net 30' }}
+              items={SAMPLE_ITEMS}
+              company={{
+                ...form,
+                logo_path: logoUrl ? 'has-logo' : null,
+                currency_symbol: form.currency_symbol || '$',
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -317,18 +367,6 @@ export default function SettingsPage() {
             ))}
           </div>
         </div>
-
-        {/* Header layout drag editor — Classic template only */}
-        {form.template_style === 'classic' && (
-          <div className="mb-5">
-            <label className="label">Header Layout (Classic template)</label>
-            <InvoiceLayoutEditor
-              company={form}
-              layout={form.header_layout}
-              onChange={(newLayout) => setField('header_layout', newLayout)}
-            />
-          </div>
-        )}
 
         {/* Header design controls — Classic only */}
         {form.template_style === 'classic' && (
