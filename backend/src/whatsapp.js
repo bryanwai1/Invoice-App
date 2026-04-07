@@ -219,12 +219,15 @@ async function handleWebhook(body) {
     const botMode = settings?.bot_mode || 'all'; // 'all' | 'group_only' | 'dm_only'
 
     // ── Mode gating ──────────────────────────────────────────────────────────
+    // Bot completely disabled — ignore everything
+    if (botMode === 'off') return;
+
     if (botMode === 'group_only') {
-      // Ignore every DM — only respond inside a group
+      // Ignore every DM
       if (!isGroup) return;
-      // If a specific group is locked in, ignore other groups
+      // Once a group is locked, it is IMMOVABLE — only cleared explicitly via UI
       if (configuredGroup && chatId !== configuredGroup) return;
-      // First group message ever — auto-save so we lock onto this group
+      // No group locked yet — auto-lock to the first group that messages us
       if (!configuredGroup) {
         db.prepare("UPDATE company_settings SET group_chat_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
           .run(chatId);
@@ -234,13 +237,9 @@ async function handleWebhook(body) {
       // Ignore all group chats — only respond to DMs
       if (isGroup) return;
     } else {
-      // 'all' mode — still respect a pinned group if one is set
+      // 'all' mode — respond everywhere, but honour an existing lock if set
+      // IMPORTANT: never auto-save in 'all' mode; only the user sets the lock via UI
       if (isGroup && configuredGroup && chatId !== configuredGroup) return;
-      if (isGroup && !configuredGroup) {
-        db.prepare("UPDATE company_settings SET group_chat_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=1")
-          .run(chatId);
-        console.log('[WhatsApp] Group ID auto-saved:', chatId);
-      }
     }
 
     let text = null;

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { whatsappApi, settingsApi } from '../api';
 import toast from 'react-hot-toast';
-import { Wifi, WifiOff, MessageCircle, ExternalLink, RefreshCw, Shield, Users, User, Trash2 } from 'lucide-react';
+import { Wifi, WifiOff, MessageCircle, ExternalLink, RefreshCw, Shield, Users, User, Trash2, PowerOff } from 'lucide-react';
 
 export default function WhatsAppPage({ socket }) {
   const [status, setStatus] = useState({ status: 'checking' });
@@ -152,50 +152,83 @@ export default function WhatsAppPage({ socket }) {
         </h2>
         <p className="text-sm text-gray-500 mb-4">Control which chats the bot listens to — prevents it from replying in every private conversation.</p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           {[
-            { value: 'group_only', icon: Users, label: 'Group Only', desc: 'Only responds inside one group chat. Ignores all DMs. Recommended.' },
-            { value: 'dm_only',   icon: User,  label: 'DMs Only',   desc: 'Only responds to direct messages. Ignores all groups.' },
-            { value: 'all',       icon: Wifi,  label: 'All Chats',  desc: 'Responds to every chat — groups and DMs. Not recommended.' },
-          ].map(({ value, icon: Icon, label, desc }) => (
-            <button
-              key={value}
-              onClick={() => saveBotMode(value)}
-              disabled={savingMode}
-              className={`text-left p-4 rounded-xl border-2 transition-all ${
-                botMode === value
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 hover:border-gray-300 bg-white'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Icon size={15} className={botMode === value ? 'text-primary-600' : 'text-gray-400'} />
-                <span className={`font-semibold text-sm ${botMode === value ? 'text-primary-700' : 'text-gray-700'}`}>{label}</span>
-                {botMode === value && <span className="ml-auto text-[10px] font-bold bg-primary-600 text-white px-1.5 py-0.5 rounded-full">ACTIVE</span>}
-              </div>
-              <p className="text-xs text-gray-500 leading-snug">{desc}</p>
-            </button>
-          ))}
+            { value: 'group_only', icon: Users,    label: 'Group Only', desc: 'One locked group only. Ignores all DMs. Recommended.' },
+            { value: 'dm_only',   icon: User,     label: 'DMs Only',   desc: 'Direct messages only. Ignores all group chats.' },
+            { value: 'all',       icon: Wifi,     label: 'All Chats',  desc: 'Groups and DMs. Respects group lock if set.' },
+            { value: 'off',       icon: PowerOff, label: 'Off',        desc: 'Bot is completely silent. No replies, no parsing.' },
+          ].map(({ value, icon: Icon, label, desc }) => {
+            const isOff = value === 'off';
+            const active = botMode === value;
+            return (
+              <button
+                key={value}
+                onClick={() => saveBotMode(value)}
+                disabled={savingMode}
+                className={`text-left p-4 rounded-xl border-2 transition-all ${
+                  active
+                    ? isOff
+                      ? 'border-red-400 bg-red-50'
+                      : 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon size={15} className={active ? (isOff ? 'text-red-500' : 'text-primary-600') : 'text-gray-400'} />
+                  <span className={`font-semibold text-sm ${active ? (isOff ? 'text-red-600' : 'text-primary-700') : 'text-gray-700'}`}>{label}</span>
+                  {active && (
+                    <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white ${isOff ? 'bg-red-500' : 'bg-primary-600'}`}>
+                      ACTIVE
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 leading-snug">{desc}</p>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Group lock status */}
-        {(botMode === 'group_only' || botMode === 'all') && (
+        {/* Off mode banner */}
+        {botMode === 'off' && (
+          <div className="rounded-lg p-3 bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+            🔕 Bot is OFF — it will not respond to any messages until you switch to another mode.
+          </div>
+        )}
+
+        {/* Group lock status — only relevant in group_only mode */}
+        {botMode === 'group_only' && (
           <div className={`rounded-lg p-3 flex items-start justify-between gap-3 ${groupChatId ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
             <div>
               <p className={`text-xs font-semibold ${groupChatId ? 'text-emerald-700' : 'text-amber-700'}`}>
-                {groupChatId ? '🔒 Group Locked' : '⏳ No Group Locked Yet'}
+                {groupChatId ? '🔒 Group Locked — bot will only respond here' : '⏳ Waiting for first group message to lock'}
               </p>
               {groupChatId
-                ? <p className="text-xs text-emerald-600 font-mono mt-0.5">{groupChatId}</p>
-                : <p className="text-xs text-amber-600 mt-0.5">Send any message from your group chat — the bot will auto-lock to it.</p>
+                ? <p className="text-xs text-emerald-600 font-mono mt-0.5 break-all">{groupChatId}</p>
+                : <p className="text-xs text-amber-600 mt-0.5">Send any message from your group — the bot will auto-lock to it permanently.</p>
               }
             </div>
             {groupChatId && (
               <button onClick={clearGroup} disabled={savingMode}
-                className="shrink-0 flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">
-                <Trash2 size={12} /> Clear
+                className="shrink-0 flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 whitespace-nowrap">
+                <Trash2 size={12} /> Unlock
               </button>
             )}
+          </div>
+        )}
+
+        {/* 'all' mode with a lock set */}
+        {botMode === 'all' && groupChatId && (
+          <div className="rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-blue-700">📌 Preferred group set</p>
+              <p className="text-xs text-blue-600 font-mono mt-0.5 break-all">{groupChatId}</p>
+              <p className="text-xs text-blue-500 mt-0.5">Bot responds to all chats but filters to this group among multiple groups.</p>
+            </div>
+            <button onClick={clearGroup} disabled={savingMode}
+              className="shrink-0 flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 whitespace-nowrap">
+              <Trash2 size={12} /> Clear
+            </button>
           </div>
         )}
       </div>
